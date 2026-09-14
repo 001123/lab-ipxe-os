@@ -31,28 +31,15 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(config.default.os).toBe("ubuntu");
     });
 
-    it("should lookup specific host by MAC for Ubuntu Docker profile", () => {
-      const host = configMgr.getHost("bc:24:11:00:24:04");
-      expect(host.hostname).toBe("srv-docker-01");
+    it("should lookup specific host by MAC for Ubuntu K3s server profile", () => {
+      const host = configMgr.getHost("bc:24:11:00:24:33");
+      expect(host.hostname).toBe("k3s-master-01");
       expect(host.os).toBe("ubuntu");
-      expect(host.profile).toBe("docker-host");
+      expect(host.profile).toBe("k3s-server");
       expect(host.network?.dhcp).toBe(false);
-      expect(host.network?.ip).toBe("192.168.1.50");
-    });
-
-    it("should lookup Talos Linux host by MAC", () => {
-      const host = configMgr.getHost("bc:24:11:00:14:00");
-      expect(host.hostname).toBe("talos-cp-01");
-      expect(host.os).toBe("talos");
-      expect(host.role).toBe("controlplane");
-      expect(host.version).toBe("v1.14.0");
-    });
-
-    it("should lookup openSUSE Leap Micro host by MAC", () => {
-      const host = configMgr.getHost("bc:24:11:00:06:20");
-      expect(host.hostname).toBe("suse-micro-01");
-      expect(host.os).toBe("suse-micro");
-      expect(host.version).toBe("6.2");
+      expect(host.network?.ip).toBe("192.168.250.33");
+      expect(host.network?.gateway).toBe("192.168.250.1");
+      expect(host.ssh_authorized_keys?.[0]).toContain("AAAAC3NzaC1lZDI1NTE5AAAAIPaWkIWwJqchLwmCMSN3hmUDVg08y3SU5L544sJSFpbW");
     });
 
     it("should fallback gracefully for unassigned MAC address", () => {
@@ -60,6 +47,8 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(host.hostname).toContain("homelab-");
       expect(host.os).toBe("ubuntu");
       expect(host.profile).toBe("generic");
+      expect(host.network?.dhcp).toBe(true);
+      expect(host.ssh_authorized_keys?.[0]).toContain("AAAAC3NzaC1lZDI1NTE5AAAAIPaWkIWwJqchLwmCMSN3hmUDVg08y3SU5L544sJSFpbW");
     });
   });
 
@@ -88,70 +77,39 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(text).toContain("Bun Multi-OS iPXE & Cloud-Init Server");
     });
 
-    it("GET /boot.ipxe for Ubuntu node should return iPXE script", async () => {
-      const res = await fetch(`${baseUrl}/boot.ipxe?mac=bc:24:11:00:24:04`);
+    it("GET /boot.ipxe for Ubuntu K3s node should return iPXE script", async () => {
+      const res = await fetch(`${baseUrl}/boot.ipxe?mac=bc:24:11:00:24:33`);
       expect(res.status).toBe(200);
       const script = await res.text();
       expect(script).toContain("#!ipxe");
-      expect(script).toContain("srv-docker-01");
+      expect(script).toContain("k3s-master-01");
       expect(script).toContain("autoinstall ds=nocloud-net");
       expect(script).toContain("vmlinuz");
       expect(script).toContain("initrd");
     });
 
-    it("GET /boot.ipxe for Talos node should return Talos iPXE script", async () => {
-      const res = await fetch(`${baseUrl}/boot.ipxe?mac=bc:24:11:00:14:00`);
-      expect(res.status).toBe(200);
-      const script = await res.text();
-      expect(script).toContain("#!ipxe");
-      expect(script).toContain("talos-cp-01");
-      expect(script).toContain("talos.platform=metal");
-      expect(script).toContain("vmlinuz-amd64");
-    });
-
-    it("GET /boot.ipxe for openSUSE Micro node should return SUSE iPXE script", async () => {
-      const res = await fetch(`${baseUrl}/boot.ipxe?mac=bc:24:11:00:06:20`);
-      expect(res.status).toBe(200);
-      const script = await res.text();
-      expect(script).toContain("#!ipxe");
-      expect(script).toContain("suse-micro-01");
-      expect(script).toContain("combustion.url=");
-    });
-
-    it("GET Ubuntu Cloud-Init user-data should return valid autoinstall YAML", async () => {
-      const res = await fetch(`${baseUrl}/os/ubuntu/bc:24:11:00:24:04/user-data`);
+    it("GET Ubuntu Cloud-Init user-data should return valid autoinstall YAML with K3s", async () => {
+      const res = await fetch(`${baseUrl}/os/ubuntu/bc:24:11:00:24:33/user-data`);
       expect(res.status).toBe(200);
       const yaml = await res.text();
       expect(yaml).toContain("#cloud-config");
       expect(yaml).toContain("autoinstall:");
-      expect(yaml).toContain("srv-docker-01");
-      expect(yaml).toContain("docker.io");
+      expect(yaml).toContain("k3s-master-01");
+      expect(yaml).toContain("192.168.250.33/24");
+      expect(yaml).toContain("192.168.250.1");
+      expect(yaml).toContain("AAAAC3NzaC1lZDI1NTE5AAAAIPaWkIWwJqchLwmCMSN3hmUDVg08y3SU5L544sJSFpbW");
+      expect(yaml).toContain("get.k3s.io");
+      expect(yaml).toContain("write-kubeconfig-mode 644");
+      expect(yaml).toContain("/home/homelab/.kube");
       expect(yaml).toContain("/api/installed");
     });
 
     it("GET Ubuntu Cloud-Init meta-data should return hostname info", async () => {
-      const res = await fetch(`${baseUrl}/os/ubuntu/bc:24:11:00:24:04/meta-data`);
+      const res = await fetch(`${baseUrl}/os/ubuntu/bc:24:11:00:24:33/meta-data`);
       expect(res.status).toBe(200);
       const yaml = await res.text();
-      expect(yaml).toContain("srv-docker-01");
-    });
-
-    it("GET Talos MachineConfig should return YAML with controlplane role", async () => {
-      const res = await fetch(`${baseUrl}/os/talos/bc:24:11:00:14:00/config.yaml`);
-      expect(res.status).toBe(200);
-      const yaml = await res.text();
-      expect(yaml).toContain("MachineConfig");
-      expect(yaml).toContain("controlplane");
-      expect(yaml).toContain("talos-cp-01");
-    });
-
-    it("GET openSUSE Combustion script should return bash script", async () => {
-      const res = await fetch(`${baseUrl}/os/suse-micro/bc:24:11:00:06:20/combustion/script`);
-      expect(res.status).toBe(200);
-      const script = await res.text();
-      expect(script).toContain("#!/bin/bash");
-      expect(script).toContain("suse-micro-01");
-      expect(script).toContain("/api/installed");
+      expect(yaml).toContain("k3s-master-01");
+      expect(yaml).toContain("i-bc2411002433");
     });
 
     it("POST /api/installed should record install and trigger local boot on subsequent iPXE call", async () => {

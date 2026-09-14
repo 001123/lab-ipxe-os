@@ -4,38 +4,11 @@
 # ==============================================================================
 
 vms:
-  - vmid: 9001
-    name: "test-ubuntu-docker"
+  - vmid: 9033
+    name: "test-ubuntu-k3s"
     os: "ubuntu"
-    mac: "bc:24:11:00:24:04"
+    mac: "bc:24:11:00:24:33"
     cores: 2
-    memory: 2048 # MB
-    disk_size: 20 # GB
+    memory: 10240 # MB (Cần 10GB khi boot mạng vì ISO 3.8GB tải tạm vào tmpfs 50% RAM, sau khi cài xong giảm lại 4GB)
+    disk_size: 30 # GB
     bios: "ovmf" # 'ovmf' (UEFI) or 'seabios'
-
-  - vmid: 9002
-    name: "test-ubuntu-k8s"
-    os: "ubuntu"
-    mac: "bc:24:11:00:24:05"
-    cores: 2
-    memory: 4096
-    disk_size: 30
-    bios: "ovmf"
-
-  - vmid: 9003
-    name: "test-talos-cp"
-    os: "talos"
-    mac: "bc:24:11:00:14:00"
-    cores: 2
-    memory: 4096
-    disk_size: 30
-    bios: "ovmf"
-
-  - vmid: 9004
-    name: "test-suse-micro"
-    os: "suse-micro"
-    mac: "bc:24:11:00:06:20"
-    cores: 2
-    memory: 2048
-    disk_size: 20
-    bios: "ovmf"

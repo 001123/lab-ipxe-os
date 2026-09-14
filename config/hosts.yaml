@@ -11,7 +11,7 @@ default:
   # Optional: encrypted password hash (defaults to password 'ubuntu')
   # password_hash: "$6$rounds=4096$homelab$..."
   ssh_authorized_keys:
-    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForHomelabAdmin homelab-admin"
+    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPaWkIWwJqchLwmCMSN3hmUDVg08y3SU5L544sJSFpbW timi@Timi-Macbook-Pro-16-M4-Pro.local"
   storage:
     layout: direct
     target_disk: "/dev/sda"
@@ -21,67 +21,39 @@ default:
 # Declarative Node Inventory mapped by MAC address (lowercase, colon-separated)
 hosts:
   # ----------------------------------------------------------------------------
-  # 1. Ubuntu Server 24.04 LTS (Docker Host Profile)
+  # 1. Ubuntu Server 24.04 LTS (K3s Single-Node Cluster - Proxmox VM)
   # ----------------------------------------------------------------------------
-  "bc:24:11:00:24:04":
-    hostname: "srv-docker-01"
+  "bc:24:11:00:24:33":
+    hostname: "k3s-master-01"
     os: ubuntu
     version: "24.04"
-    profile: docker-host
+    profile: k3s-server
     network:
       dhcp: false
-      ip: "192.168.1.50"
+      ip: "192.168.250.33"
       netmask: "255.255.255.0"
-      gateway: "192.168.1.1"
-      nameservers: ["1.1.1.1", "8.8.8.8"]
+      gateway: "192.168.250.1"
+      nameservers: ["192.168.250.1", "1.1.1.1"]
     storage:
       target_disk: "/dev/sda"
-    extra_packages:
-      - "htop"
-      - "iotop"
     force_install: false
 
   # ----------------------------------------------------------------------------
-  # 2. Ubuntu Server 24.04 LTS (Kubernetes Node Profile)
+  # 2. Template cho máy thật (Bare-Metal K3s Server)
+  # Bỏ comment và thay thế MAC của card mạng máy thật khi bạn sẵn sàng triển khai
   # ----------------------------------------------------------------------------
-  "bc:24:11:00:24:05":
-    hostname: "k8s-worker-01"
-    os: ubuntu
-    version: "24.04"
-    profile: k8s-node
-    network:
-      dhcp: true
-    storage:
-      target_disk: "/dev/sda"
-
-  # ----------------------------------------------------------------------------
-  # 3. Talos Linux v1.14.0 (Kubernetes Control Plane)
-  # ----------------------------------------------------------------------------
-  "bc:24:11:00:14:00":
-    hostname: "talos-cp-01"
-    os: talos
-    version: "v1.14.0"
-    role: controlplane # 'controlplane' or 'worker'
-    storage:
-      target_disk: "/dev/sda"
-    network:
-      dhcp: false
-      ip: "192.168.1.60"
-      netmask: "255.255.255.0"
-      gateway: "192.168.1.1"
-      nameservers: ["1.1.1.1"]
-    custom:
-      clusterName: "homelab-k8s"
-
-  # ----------------------------------------------------------------------------
-  # 4. openSUSE Leap Micro 6.2 (Edge Container Host with Combustion)
-  # ----------------------------------------------------------------------------
-  "bc:24:11:00:06:20":
-    hostname: "suse-micro-01"
-    os: suse-micro
-    version: "6.2"
-    user: homelab
-    network:
-      dhcp: true
-    storage:
-      target_disk: "/dev/sda"
+  # "xx:xx:xx:xx:xx:xx":
+  #   hostname: "baremetal-k3s-01"
+  #   os: ubuntu
+  #   version: "24.04"
+  #   profile: k3s-server
+  #   network:
+  #     dhcp: false
+  #     ip: "192.168.250.34"
+  #     netmask: "255.255.255.0"
+  #     gateway: "192.168.250.1"
+  #     nameservers: ["192.168.250.1", "1.1.1.1"]
+  #   storage:
+  #     # Tuỳ loại ổ cứng máy thật: /dev/nvme0n1 (NVMe) hoặc /dev/sda (SATA SSD)
+  #     target_disk: "/dev/nvme0n1"
+  #   force_install: false

@@ -21,14 +21,14 @@ const ASSET_SPECS: AssetSpec[] = [
         name: "vmlinuz",
         description: "Ubuntu 24.04 Kernel",
         downloadUrl:
-          "https://archive.ubuntu.com/ubuntu/dists/noble/main/installer-amd64/current/legacy-images/netboot/ubuntu-installer/amd64/linux",
+          "https://releases.ubuntu.com/24.04/netboot/amd64/linux",
         required: true,
       },
       {
         name: "initrd",
         description: "Ubuntu 24.04 Initrd",
         downloadUrl:
-          "https://archive.ubuntu.com/ubuntu/dists/noble/main/installer-amd64/current/legacy-images/netboot/ubuntu-installer/amd64/initrd.gz",
+          "https://releases.ubuntu.com/24.04/netboot/amd64/initrd",
         required: true,
       },
       {

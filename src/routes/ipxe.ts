@@ -74,8 +74,8 @@ shell
 
   const installScriptBody = provider.renderIpxe(bootCtx);
 
-  // Auto install determination: if ?auto=1 or host config auto_install is true
-  const autoInstall = url.searchParams.get("auto") === "1" || host.custom?.auto_install === true;
+  // Auto install determination: if ?auto=1 or host config auto_install is true or not yet installed
+  const autoInstall = url.searchParams.get("auto") === "1" || host.custom?.auto_install === true || !isInstalled;
   const defaultOption = autoInstall ? "install" : "local";
 
   const menuScript = `#!ipxe

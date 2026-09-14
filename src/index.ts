@@ -18,6 +18,7 @@ export const server = Bun.serve({
   async fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const pathname = url.pathname;
+    console.log(`[HTTP] ${req.method} ${pathname}${url.search}`);
 
     // CORS headers for API calls
     if (req.method === "OPTIONS") {

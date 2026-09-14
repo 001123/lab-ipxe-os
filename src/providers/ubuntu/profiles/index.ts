@@ -18,6 +18,41 @@ export function getUbuntuProfile(profileName: string, host: HostConfig, baseUrl:
   ];
 
   switch (profileName.toLowerCase()) {
+    case "k3s-server":
+    case "k3s":
+      return {
+        packages: [
+          "curl",
+          "qemu-guest-agent",
+          "htop",
+          "iotop",
+          "net-tools",
+          "open-iscsi",
+          "nfs-common",
+          "ca-certificates",
+        ],
+        lateCommands: [
+          // Disable swap in fstab
+          `curtin in-target --target=/target -- sed -i '/ swap / s/^\\(.*\\)$/#\\1/g' /etc/fstab`,
+          // Configure sysctl for Kubernetes networking
+          `curtin in-target --target=/target -- sh -c 'cat <<EOF > /etc/sysctl.d/99-kubernetes.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF'`,
+          // Modules load
+          `curtin in-target --target=/target -- sh -c 'cat <<EOF > /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF'`,
+          // Install K3s server with write-kubeconfig-mode 644
+          `curtin in-target --target=/target -- sh -c 'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644" sh -'`,
+          // Setup kubeconfig for default user
+          `curtin in-target --target=/target -- sh -c 'mkdir -p /home/${defaultUser}/.kube && cp /etc/rancher/k3s/k3s.yaml /home/${defaultUser}/.kube/config && chown -R ${defaultUser}:${defaultUser} /home/${defaultUser}/.kube || true'`,
+          ...baseLateCommands,
+        ],
+      };
+
     case "docker-host":
       return {
         packages: [

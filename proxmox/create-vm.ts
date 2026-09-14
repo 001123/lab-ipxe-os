@@ -141,18 +141,21 @@ async function createVm(
   console.log(`[PVE] Creating VM ${vm.vmid} (${vm.name}) with MAC ${vm.mac}...`);
 
   const bios = vm.bios || "ovmf";
+  const nicModel = bios === "ovmf" ? "e1000" : "virtio";
   const payload: Record<string, any> = {
     vmid: vm.vmid,
     name: vm.name,
     cores: vm.cores,
     memory: vm.memory,
     bios: bios,
+    machine: "q35",
     scsihw: "virtio-scsi-pci",
     scsi0: `${creds.storage}:${vm.disk_size},discard=on,ssd=1`,
-    net0: `virtio=${vm.mac},bridge=${creds.bridge}`,
+    net0: `${nicModel}=${vm.mac},bridge=${creds.bridge},firewall=0`,
     boot: "order=net0;scsi0", // PXE network boot first, then local disk
     agent: 1,
     ostype: "l26",
+    rng0: "source=/dev/urandom",
   };
 
   if (bios === "ovmf") {

@@ -55,13 +55,15 @@ create_vm() {
     "cores": $CORES,
     "memory": $MEMORY,
     "bios": "ovmf",
+    "machine": "q35",
     "efidisk0": "${PVE_STORAGE}:1,efitype=4m,pre-enrolled-keys=0",
     "scsihw": "virtio-scsi-pci",
     "scsi0": "${PVE_STORAGE}:${DISK_SIZE},discard=on,ssd=1",
-    "net0": "virtio=${MAC},bridge=${PVE_BRIDGE}",
+    "net0": "e1000=${MAC},bridge=${PVE_BRIDGE},firewall=0",
     "boot": "order=net0;scsi0",
     "agent": 1,
-    "ostype": "l26"
+    "ostype": "l26",
+    "rng0": "source=/dev/urandom"
 }
 EOF
 
