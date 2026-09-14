@@ -12,3 +12,13 @@ vms:
     memory: 5120 # MB (5GB phù hợp với máy chủ vật lý 8GB RAM, đủ chạy Subiquity mượt mà)
     disk_size: 30 # GB
     bios: "ovmf" # 'ovmf' (UEFI) or 'seabios'
+
+  - vmid: 9035
+    name: "rke2-micro-node"
+    os: "suse-micro"
+    mac: "bc:24:11:00:24:35"
+    cores: 2
+    memory: 4096 # MB (4GB RAM)
+    disk_size: 30 # GB
+    bios: "ovmf" # 'ovmf' (UEFI)
+

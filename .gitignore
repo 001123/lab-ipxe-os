@@ -12,14 +12,8 @@ proxmox/credentials.env
 data/state.json
 data/*.sqlite*
 
-# Large Assets (ISOs, raw images, kernels, initrd)
-assets/**/*.iso
-assets/**/*.raw
-assets/**/*.qcow2
-assets/**/*.img
-assets/**/vmlinuz*
-assets/**/initrd*
-assets/**/initramfs*
+# Large Assets (ISOs, raw images, kernels, initrd, archives)
+assets/**/*
 !assets/**/.gitkeep
 
 # System & IDE

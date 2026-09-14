@@ -147,6 +147,7 @@ async function createVm(
     name: vm.name,
     cores: vm.cores,
     memory: vm.memory,
+    cpu: "host",
     bios: bios,
     machine: "q35",
     scsihw: "virtio-scsi-pci",

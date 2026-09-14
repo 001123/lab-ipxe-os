@@ -4,6 +4,8 @@ import { writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { ConfigManager } from "../src/config.ts";
 import { StateManager } from "../src/core/state.ts";
 import { getUbuntuProfile } from "../src/providers/ubuntu/profiles/index.ts";
+import { getSuseMicroProfile } from "../src/providers/suse-micro/profiles/index.ts";
+import { renderSuseCombustionScript } from "../src/providers/suse-micro/combustion.ts";
 import { server } from "../src/index.ts";
 
 describe("Bun Multi-OS iPXE Server Tests", () => {
@@ -149,6 +151,22 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       const buffer = await res.arrayBuffer();
       expect(buffer.byteLength).toBe(512);
     });
+
+    it("GET openSUSE Leap Micro Combustion script should return valid bash script with RKE2", async () => {
+      const res = await fetch(`${baseUrl}/os/suse-micro/bc:24:11:00:24:35/combustion/script`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/x-shellscript");
+      const script = await res.text();
+      expect(script).toContain("#!/bin/bash");
+      expect(script).toContain("# combustion: network");
+      expect(script).toContain("rke2-micro-node");
+      expect(script).toContain("write-kubeconfig-mode: \"0644\"");
+      expect(script).toContain("cni: \"canal\"");
+      expect(script).toContain("- \"traefik\"");
+      expect(script).toContain("INSTALL_RKE2_METHOD=rpm");
+      expect(script).toContain("systemctl enable rke2-server.service");
+      expect(script).toContain("/api/installed");
+    });
   });
 
   describe("Ubuntu Profiles", () => {
@@ -214,4 +232,92 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       warnSpy.mockRestore();
     });
   });
+
+  describe("openSUSE Leap Micro Profiles", () => {
+    const mockSuseHost = {
+      mac: "00:11:22:33:44:55",
+      hostname: "rke2-test-node",
+      os: "suse-micro",
+      profile: "rke2-single-node",
+      user: "homelab",
+      network: {
+        dhcp: false,
+        ip: "192.168.250.50",
+      },
+    };
+    const baseUrl = "http://localhost:3000";
+
+    it("should return rke2-single-node profile with packages and configuration snippets", () => {
+      const profile = getSuseMicroProfile("rke2-single-node", mockSuseHost, baseUrl);
+      expect(profile.packages).toContain("curl");
+      expect(profile.packages).toContain("ca-certificates");
+      expect(profile.packages).toContain("nfs-client");
+      expect(profile.packages).toContain("open-iscsi");
+      expect(profile.packages).toContain("qemu-guest-agent");
+
+      const script = profile.scriptSnippets.join("\n");
+      expect(script).toContain("btrfs filesystem resize max /");
+      expect(script).toContain("systemctl disable firewalld");
+      expect(script).toContain("net.ipv4.ip_forward");
+      expect(script).toContain("overlay");
+      expect(script).toContain("br_netfilter");
+      expect(script).toContain("write-kubeconfig-mode: \"0644\"");
+      expect(script).toContain("cni: \"canal\"");
+      expect(script).toContain("ingress-controller:");
+      expect(script).toContain("- \"traefik\"");
+      expect(script).toContain("192.168.250.50");
+      expect(script).toContain("INSTALL_RKE2_METHOD=rpm");
+      expect(script).toContain("systemctl enable rke2-server.service");
+      expect(script).toContain("KUBECONFIG=/etc/rancher/rke2/rke2.yaml");
+      expect(script).toContain(".kube/config");
+    });
+
+    it("should support custom rke2_version, rke2_token, and rke2_cni", () => {
+      const customHost = {
+        ...mockSuseHost,
+        custom: {
+          rke2_version: "v1.36.4+rke2r1",
+          rke2_token: "super-secret-cluster-token",
+          rke2_cni: "cilium",
+          rke2_ingress: "ingress-nginx",
+        },
+      };
+      const profile = getSuseMicroProfile("rke2-single-node", customHost, baseUrl);
+      const script = profile.scriptSnippets.join("\n");
+      expect(script).toContain('INSTALL_RKE2_VERSION="v1.36.4+rke2r1"');
+      expect(script).toContain('token: "super-secret-cluster-token"');
+      expect(script).toContain('cni: "cilium"');
+      expect(script).toContain('- "ingress-nginx"');
+    });
+
+    it("should return generic profile with base utilities and btrfs resize", () => {
+      const profile = getSuseMicroProfile("generic", mockSuseHost, baseUrl);
+      expect(profile.packages).toContain("curl");
+      expect(profile.packages).toContain("htop");
+      expect(profile.packages).toContain("git");
+      const script = profile.scriptSnippets.join("\n");
+      expect(script).toContain("btrfs filesystem resize max /");
+    });
+
+    it("should fallback to generic profile with warning when given unknown profile", () => {
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      const fallback = getSuseMicroProfile("unknown-profile", mockSuseHost, baseUrl);
+      expect(warnSpy).toHaveBeenCalled();
+      expect(fallback.packages).toContain("git");
+      warnSpy.mockRestore();
+    });
+
+    it("renderSuseCombustionScript should assemble complete bash combustion script", () => {
+      const fullScript = renderSuseCombustionScript(mockSuseHost, baseUrl);
+      expect(fullScript).toContain("#!/bin/bash");
+      expect(fullScript).toContain("# combustion: network");
+      expect(fullScript).toContain("rke2-test-node");
+      expect(fullScript).toContain('useradd -m -U -G wheel "homelab"');
+      expect(fullScript).toContain("zypper --non-interactive --no-gpg-checks in -y");
+      expect(fullScript).toContain("INSTALL_RKE2_METHOD=rpm");
+      expect(fullScript).toContain("efibootmgr");
+      expect(fullScript).toContain("/api/installed?mac=00%3A11%3A22%3A33%3A44%3A55&hostname=rke2-test-node&os=suse-micro");
+    });
+  });
 });
+

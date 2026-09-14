@@ -28,7 +28,6 @@ hosts:
     os: ubuntu
     version: "24.04"
     profile: k3s-single-node
-    # Máy ảo RAM 4-5GB -> dùng boot_method: nfs để stream trực tiếp, không tốn RAM
     custom:
       boot_method: nfs
       nfs_root: "192.168.250.4:/srv/nfs/ubuntu-${version}"
@@ -51,11 +50,9 @@ hosts:
     os: ubuntu
     version: "24.04"
     profile: k3s-single-node
-    # Máy vật lý RAM >= 8GB: dùng HTTP (mặc định), tự kéo ISO qua mạng mà KHÔNG cần NFS server!
     custom:
       boot_method: nfs
       nfs_root: "192.168.250.4:/srv/nfs/ubuntu-24.04"
-      # Phiên bản K3s (nếu để trống, hệ thống tự động lấy bản stable mới nhất)
       k3s_version: "v1.36.4+k3s1"
     network:
       dhcp: false
@@ -64,6 +61,29 @@ hosts:
       gateway: "192.168.250.1"
       nameservers: ["192.168.250.1", "1.1.1.1"]
     storage:
-      # Tuỳ loại ổ cứng máy thật: /dev/nvme0n1 (NVMe) hoặc /dev/sda (SATA SSD)
+      target_disk: "/dev/sda"
+    force_install: false
+
+  # ----------------------------------------------------------------------------
+  # 3. Template cho openSUSE Leap Micro 6.2 (RKE2 Single-Node Server)
+  # Thay thế địa chỉ MAC bằng card mạng máy của bạn khi sẵn sàng triển khai
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:24:35":
+    hostname: "rke2-micro-node"
+    os: suse-micro
+    version: "6.2"
+    profile: rke2-single-node
+    custom:
+      rke2_version: ""
+      rke2_token: ""
+      rke2_cni: "canal"
+      rke2_ingress: "traefik"
+    network:
+      dhcp: false
+      ip: "192.168.250.35"
+      netmask: "255.255.255.0"
+      gateway: "192.168.250.1"
+      nameservers: ["192.168.250.1", "1.1.1.1"]
+    storage:
       target_disk: "/dev/sda"
     force_install: false

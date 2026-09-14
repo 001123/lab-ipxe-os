@@ -74,21 +74,35 @@ const ASSET_SPECS: AssetSpec[] = [
     version: "6.2",
     files: [
       {
-        name: "openSUSE-Leap-Micro.x86_64-6.2-Default-SelfInstall.iso",
-        description: "openSUSE Leap Micro 6.2 SelfInstall ISO",
+        name: "openSUSE-Leap-Micro.x86_64-Default-SelfInstall.install.tar",
+        description: "openSUSE Leap Micro 6.2 PXE SelfInstall Archive (Single Source of Truth)",
         downloadUrl:
-          "https://download.opensuse.org/distribution/leap-micro/6.2/product/iso/openSUSE-Leap-Micro.x86_64-6.2-Default-SelfInstall.iso",
-        required: false,
+          "https://download.opensuse.org/distribution/leap-micro/6.2/appliances/openSUSE-Leap-Micro.x86_64-Default-SelfInstall.install.tar",
+        required: true,
       },
       {
         name: "vmlinuz",
-        description: "openSUSE Leap Micro 6.2 Kernel",
+        description: "openSUSE Leap Micro 6.2 Kernel (Extracted from openSUSE-Leap-Micro.x86_64-6.2.kernel)",
         required: true,
+        extractedFromIso: {
+          sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.kernel",
+        },
       },
       {
         name: "initrd",
-        description: "openSUSE Leap Micro 6.2 Initrd",
+        description: "openSUSE Leap Micro 6.2 Initrd (Extracted from openSUSE-Leap-Micro.x86_64-6.2.initrd)",
         required: true,
+        extractedFromIso: {
+          sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.initrd",
+        },
+      },
+      {
+        name: "openSUSE-Leap-Micro.x86_64-6.2.xz",
+        description: "openSUSE Leap Micro 6.2 Target OS Image for Kiwi PXE",
+        required: true,
+        extractedFromIso: {
+          sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.xz",
+        },
       },
     ],
   },
@@ -138,13 +152,14 @@ function getKernelInfo(filePath: string): string {
 
 async function downloadFile(url: string, destPath: string): Promise<void> {
   console.log(`     Downloading from ${url}...`);
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to download ${url}: ${res.statusText}`);
+  const res = spawnSync("curl", ["-#", "-fL", "--retry", "3", "--connect-timeout", "30", "-o", destPath, url], {
+    stdio: "inherit",
+  });
+  if (res.status !== 0) {
+    throw new Error(`Failed to download ${url} (curl exit code ${res.status})`);
   }
-  const arrayBuffer = await res.arrayBuffer();
-  await Bun.write(destPath, arrayBuffer);
-  console.log(`     Saved to ${destPath} (${formatBytes(arrayBuffer.byteLength)})`);
+  const stat = statSync(destPath);
+  console.log(`     Saved to ${destPath} (${formatBytes(stat.size)})`);
 }
 
 async function main() {
@@ -166,8 +181,8 @@ async function main() {
 
     console.log(`\n📁 [${spec.os.toUpperCase()} ${spec.version}] Directory: ${dir}`);
 
-    // Locate primary ISO in spec if any
-    const isoFileSpec = spec.files.find((f) => f.name.endsWith(".iso"));
+    // Locate primary ISO or TAR archive in spec if any
+    const isoFileSpec = spec.files.find((f) => f.name.endsWith(".iso") || f.name.endsWith(".tar"));
     const isoPath = isoFileSpec ? join(dir, isoFileSpec.name) : null;
     const isoExists = isoPath ? existsSync(isoPath) : false;
 
