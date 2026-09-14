@@ -55,6 +55,16 @@ Nếu lệnh `sanboot` gặp sự cố (ví dụ: ổ cứng thứ nhất chưa 
 - Lệnh `exit 1` sẽ kết thúc chương trình thực thi của iPXE EFI Application (`ipxe.efi`).
 - Ngay khi iPXE thoát với mã lỗi khác 0, trình quản lý **UEFI Boot Manager (NVRAM)** của bo mạch chủ sẽ tự động chuyển tiếp sang mục ưu tiên khởi động kế tiếp trong danh sách (thông thường là mục `ubuntu` trỏ vào `\EFI\ubuntu\shimx64.efi` trên ổ đĩa nội bộ).
 
+### 2.3. Cơ chế bảo vệ thứ tự khởi động UEFI NVRAM (`efibootmgr` late-command)
+Trên các hệ thống Bare-metal hiện đại (như bo mạch chủ Intel Gen 12+ LGA1700 H610/B660/B760 hoặc AMD AM5), quá trình cài đặt OS mặc định sẽ gọi `grub-install`, và công cụ này tự ý chèn `ubuntu` lên vị trí số 1 của biến `BootOrder` trong NVRAM. Điều này khiến máy tính ở các lần reboot sau nhảy thẳng vào ổ cứng mà không qua iPXE nữa.
+
+Để bảo toàn mô hình ZTP, dự án tích hợp script `efibootmgr` tự động trong `late-commands` của Ubuntu Autoinstall ([src/providers/ubuntu/profiles/index.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/ubuntu/profiles/index.ts)):
+1. Tìm mã `BootID` của card mạng (`IPv4` / `PXE` / `Network`).
+2. Sắp xếp lại `BootOrder`, đưa card mạng về vị trí ưu tiên **#1**, và giữ `ubuntu` ở vị trí **#2**.
+3. **Lợi ích kép**:
+   - **Khi iPXE Server online**: Node luôn boot vào iPXE để Server quyết định (re-install hoặc chạy `sanboot`).
+   - **Khi iPXE Server offline / Rút dây mạng**: BIOS tự động fallback sang mục #2 (`ubuntu` trên SSD), đảm bảo hệ thống không bao giờ bị gián đoạn.
+
 ---
 
 ## 3. Kiến Trúc State Machine Của Bun Server

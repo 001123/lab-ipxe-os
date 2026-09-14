@@ -164,12 +164,14 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       const profile = getUbuntuProfile("k3s-single-node", mockHost, baseUrl);
       expect(profile.packages).toContain("open-iscsi");
       expect(profile.packages).toContain("nfs-common");
+      expect(profile.packages).toContain("efibootmgr");
       expect(profile.lateCommands.some((c) => c.includes("config.yaml"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("get.k3s.io"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("tls-san"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("KUBECONFIG=/etc/rancher/k3s/k3s.yaml"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes(".kube/config"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("systemctl enable k3s"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("efibootmgr"))).toBe(true);
     });
 
     it("should support custom k3s_version in k3s-single-node profile", () => {
@@ -186,7 +188,9 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(profile.packages).toContain("curl");
       expect(profile.packages).toContain("htop");
       expect(profile.packages).toContain("git");
+      expect(profile.packages).toContain("efibootmgr");
       expect(profile.lateCommands.some((c) => c.includes("qemu-guest-agent"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("efibootmgr"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("/api/installed"))).toBe(true);
     });
 

@@ -11,6 +11,8 @@ export function getUbuntuProfile(profileName: string, host: HostConfig, baseUrl:
   const baseLateCommands: string[] = [
     // Ensure network-online and curl available
     `curtin in-target --target=/target -- systemctl enable qemu-guest-agent || true`,
+    // Restore UEFI Network/PXE boot priority so iPXE StateManager retains control on bare-metal
+    `curtin in-target --target=/target -- sh -c 'PXE_ID=$(efibootmgr 2>/dev/null | grep -Ei "IPv4|PXE|Network|Ethernet|IP4" | head -n 1 | sed -E "s/^Boot([0-9A-Fa-f]+).*/\\1/"); CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep -i "^BootOrder:" | awk "{print \\$2}"); if [ -n "$PXE_ID" ] && [ -n "$CURRENT_ORDER" ]; then REST=$(echo "$CURRENT_ORDER" | tr "," "\\n" | grep -vi "^$PXE_ID$" | tr "\\n" "," | sed "s/,$//"); if [ -n "$REST" ]; then efibootmgr -o "$PXE_ID,$REST" || true; else efibootmgr -o "$PXE_ID" || true; fi; fi' || true`,
     // Phone-home webhook to Bun server to mark installation finished
     `curtin in-target --target=/target -- curl -s -X POST "${baseUrl}/api/installed?mac=${encodeURIComponent(
       host.mac
@@ -42,6 +44,7 @@ export function getUbuntuProfile(profileName: string, host: HostConfig, baseUrl:
           "open-iscsi",
           "nfs-common",
           "ca-certificates",
+          "efibootmgr",
         ],
         lateCommands: [
           // Disable swap in fstab
@@ -92,6 +95,7 @@ EOF'`,
           "tmux",
           "net-tools",
           "git",
+          "efibootmgr",
         ],
         lateCommands: [...baseLateCommands],
       };
