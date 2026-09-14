@@ -33,6 +33,7 @@ export function getUbuntuProfile(profileName: string, host: HostConfig, baseUrl:
       const k3sVersionEnv = host.custom?.k3s_version
         ? `INSTALL_K3S_VERSION="${host.custom.k3s_version}" `
         : "";
+      const configuredK3sVersion = host.custom?.k3s_version || "";
 
       return {
         packages: [
@@ -69,8 +70,8 @@ ${sanEntries}
 EOF'`,
           // Fallback runtime script: dynamically append IP to tls-san if obtained via DHCP
           `curtin in-target --target=/target -- sh -c 'NODE_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk "{print \\$7}"); if [ -n "$NODE_IP" ] && ! grep -q "$NODE_IP" /etc/rancher/k3s/config.yaml; then echo "  - \\"$NODE_IP\\"" >> /etc/rancher/k3s/config.yaml; fi'`,
-          // Pre-install K3s binary & systemd service (skip start in chroot)
-          `curtin in-target --target=/target -- sh -c 'curl -sfL https://get.k3s.io | ${k3sVersionEnv}INSTALL_K3S_SKIP_START=true sh -'`,
+          // Pre-download K3s binary with progress bar and explicit versioning, then setup service & symlinks
+          `curtin in-target --target=/target -- sh -c 'K3S_VER="${configuredK3sVersion}"; if [ -z "$K3S_VER" ]; then echo "[iPXE K3s] Querying latest stable K3s release from update.k3s.io..." | (tee -a /dev/console 2>/dev/null || cat); K3S_VER=$(curl -sL --connect-timeout 15 -w "%{url_effective}" https://update.k3s.io/v1-release/channels/stable -o /dev/null | sed -e "s|.*/||"); fi; [ -z "$K3S_VER" ] && K3S_VER="v1.31.5+k3s1"; ARCH=$(uname -m); SUFFIX=""; case "$ARCH" in aarch64|arm64) SUFFIX="-arm64" ;; *) SUFFIX="" ;; esac; BIN_URL="https://github.com/k3s-io/k3s/releases/download/$K3S_VER/k3s$SUFFIX"; echo "[iPXE K3s] Downloading binary: $BIN_URL ($K3S_VER, $ARCH)..." | (tee -a /dev/console 2>/dev/null || cat); mkdir -p /usr/local/bin; curl -# -fL --retry 3 --connect-timeout 30 -o /usr/local/bin/k3s "$BIN_URL" 2>&1 | (tee /dev/console 2>/dev/null || cat); chmod 755 /usr/local/bin/k3s; /usr/local/bin/k3s --version | (tee -a /dev/console 2>/dev/null || cat); echo "[iPXE K3s] Installing systemd service & symlinks via get.k3s.io..." | (tee -a /dev/console 2>/dev/null || cat); curl -sfL https://get.k3s.io | ${k3sVersionEnv}INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_SKIP_START=true sh - 2>&1 | (tee -a /dev/console 2>/dev/null || cat)'`,
           // Ensure systemd service is enabled to start upon first real boot
           `curtin in-target --target=/target -- systemctl enable k3s || true`,
           // Set system-wide KUBECONFIG for homelab and all users

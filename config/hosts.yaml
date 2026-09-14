@@ -55,6 +55,8 @@ hosts:
     custom:
       boot_method: nfs
       nfs_root: "192.168.250.4:/srv/nfs/ubuntu-24.04"
+      # Phiên bản K3s (nếu để trống, hệ thống tự động lấy bản stable mới nhất)
+      k3s_version: "v1.36.4+k3s1"
     network:
       dhcp: false
       ip: "192.168.250.34"

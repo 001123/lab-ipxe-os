@@ -167,6 +167,10 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(profile.packages).toContain("efibootmgr");
       expect(profile.lateCommands.some((c) => c.includes("config.yaml"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("get.k3s.io"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("INSTALL_K3S_SKIP_DOWNLOAD=true"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("curl -#"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("/dev/console"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("update.k3s.io"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("tls-san"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("KUBECONFIG=/etc/rancher/k3s/k3s.yaml"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes(".kube/config"))).toBe(true);
@@ -181,6 +185,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       };
       const profile = getUbuntuProfile("k3s-single-node", versionHost, baseUrl);
       expect(profile.lateCommands.some((c) => c.includes('INSTALL_K3S_VERSION="v1.31.0+k3s1"'))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes('K3S_VER="v1.31.0+k3s1"'))).toBe(true);
     });
 
     it("should return generic profile with base utilities", () => {
