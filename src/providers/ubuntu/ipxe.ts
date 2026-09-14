@@ -20,9 +20,9 @@ export function renderUbuntuIpxe(ctx: BootContext): string {
 
   let kernelBootArgs = "";
   if (bootMethod === "nfs" && nfsRoot) {
-    kernelBootArgs = `boot=casper netboot=nfs nfsroot=${nfsRoot} ip=dhcp autoinstall ds=nocloud-net;s=\${base_url}/os/ubuntu/${mac}/`;
+    kernelBootArgs = `root=/dev/ram0 ramdisk_size=3500000 boot=casper netboot=nfs nfsroot=${nfsRoot} ip=dhcp autoinstall ds=nocloud-net;s=\${base_url}/os/ubuntu/${mac}/ cloud-config-url=/dev/null`;
   } else {
-    kernelBootArgs = `boot=casper url=\${base_url}/assets/ubuntu/${version}/${isoName} ip=dhcp autoinstall ds=nocloud-net;s=\${base_url}/os/ubuntu/${mac}/`;
+    kernelBootArgs = `root=/dev/ram0 ramdisk_size=3500000 boot=casper netboot=url url=\${base_url}/assets/ubuntu/${version}/${isoName} iso-url=\${base_url}/assets/ubuntu/${version}/${isoName} ip=dhcp autoinstall ds=nocloud-net;s=\${base_url}/os/ubuntu/${mac}/ cloud-config-url=/dev/null`;
   }
 
   return `#!ipxe
@@ -34,9 +34,10 @@ echo Profile:  ${hostConfig.profile || "generic"}
 echo Method:   ${bootMethod.toUpperCase()}${bootMethod === "nfs" ? ` (${nfsRoot})` : ""}
 echo ==========================================================
 
+imgfree
 set base_url ${baseUrl}
 echo Loading Linux Kernel...
-kernel \${base_url}/assets/ubuntu/${version}/vmlinuz initrd=initrd ${kernelBootArgs}
+kernel \${base_url}/assets/ubuntu/${version}/vmlinuz ${kernelBootArgs}
 echo Loading Initrd...
 initrd \${base_url}/assets/ubuntu/${version}/initrd
 boot

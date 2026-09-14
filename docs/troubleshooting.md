@@ -164,6 +164,31 @@ Khi máy đang trong quá trình cài đặt mà bị dừng hoặc báo lỗi:
 
 ---
 
+### 4.4. Lỗi Kernel Panic: `VFS: Unable to mount root fs on unknown-block(0,0)`
+- **Triệu chứng**:
+  - Khi khởi động qua mạng (PXE / netboot.xyz) trên Bare-metal hoặc VM, kernel vừa nạp xong thì sập màn hình đen báo lỗi:
+    ```
+    No filesystem could mount root, tried:
+    Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)
+    ```
+- **Nguyên nhân cốt lõi**:
+  1. **Lệch phiên bản giữa Kernel (`vmlinuz`) và Rootfs (`/lib/modules/`)**: File `vmlinuz` tải từ online netboot mirror (ví dụ Kernel 7.0 HWE) nhưng Rootfs (NFS hoặc Squashfs trong ISO) chỉ có module của Kernel 6.8 GA.
+  2. **Bộ nhớ đệm iPXE của netboot.xyz bị bẩn**: Thiếu lệnh `imgfree` khiến iPXE ghép nối ảnh cũ vào `initrd` làm hỏng quá trình giải nén ramdisk.
+  3. **Xung đột tham số `initrd=initrd` trên UEFI**: Trình EFI Stub hiểu nhầm là phải tìm file `initrd` trên phân vùng ổ đĩa cục bộ thay vì nhận qua RAM từ iPXE.
+  4. **Dung lượng ramdisk quá nhỏ**: Thiếu `ramdisk_size=3500000` khiến ramdisk bị tràn khi giải nén firmware và zstd rootfs.
+- **Cách khắc phục**:
+  - **Trích xuất trực tiếp Kernel và Initrd từ cùng file ISO gốc (Single Source of Truth)**:
+    ```bash
+    bsdtar -xf assets/ubuntu/24.04/ubuntu-24.04-live-server-amd64.iso -C /tmp casper/vmlinuz casper/initrd
+    mv /tmp/casper/vmlinuz assets/ubuntu/24.04/vmlinuz
+    mv /tmp/casper/initrd assets/ubuntu/24.04/initrd
+    rm -rf /tmp/casper
+    ```
+  - Trong kịch bản iPXE, luôn thêm `imgfree` và tham số `root=/dev/ram0 ramdisk_size=3500000`.
+  - **Xem tài liệu hướng dẫn chuyên sâu**: [Cẩm Nang Đồng Bộ Kernel/Rootfs & Tích Hợp netboot.xyz](file:///Users/timi/lab/lab-ipxe-os/docs/kernel-sync-and-netboot-guide.md).
+
+---
+
 ## 5. Tầng 5: Sự Cố Kubernetes K3s & Bootstrap
 
 Sau khi máy đã hoàn tất cài đặt và khởi động lại vào Ubuntu:

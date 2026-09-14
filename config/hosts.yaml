@@ -53,7 +53,8 @@ hosts:
     profile: k3s-single-node
     # Máy vật lý RAM >= 8GB: dùng HTTP (mặc định), tự kéo ISO qua mạng mà KHÔNG cần NFS server!
     custom:
-      boot_method: http
+      boot_method: nfs
+      nfs_root: "192.168.250.4:/srv/nfs/ubuntu-24.04"
     network:
       dhcp: false
       ip: "192.168.250.34"
