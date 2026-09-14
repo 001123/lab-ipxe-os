@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+bun.lockb
+bun.lock
+
+# Environment & Secrets
+.env
+.env.local
+proxmox/credentials.env
+
+# Dynamic Data & State
+data/state.json
+data/*.sqlite*
+
+# Large Assets (ISOs, raw images)
+assets/**/*.iso
+assets/**/*.raw
+assets/**/*.qcow2
+assets/**/*.img
+!assets/**/.gitkeep
+
+# System & IDE
+.DS_Store
+*.log
+dist/

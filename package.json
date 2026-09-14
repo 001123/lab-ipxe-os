@@ -1,0 +1,19 @@
+{
+  "name": "lab-ipxe-os",
+  "version": "1.0.0",
+  "description": "Multi-OS iPXE and Cloud-Init Autoinstall server powered by Bun and TypeScript",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "test": "bun test",
+    "sync-assets": "bun src/scripts/sync-assets.ts",
+    "proxmox:create": "bun proxmox/create-vm.ts"
+  },
+  "dependencies": {
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

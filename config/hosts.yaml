@@ -1,0 +1,87 @@
+# ==============================================================================
+# Bun Multi-OS iPXE & Cloud-Init Hosts Configuration
+# ==============================================================================
+
+# Default profile applied when a booting node's MAC address is not registered
+default:
+  os: ubuntu
+  version: "24.04"
+  profile: generic
+  user: homelab
+  # Optional: encrypted password hash (defaults to password 'ubuntu')
+  # password_hash: "$6$rounds=4096$homelab$..."
+  ssh_authorized_keys:
+    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForHomelabAdmin homelab-admin"
+  storage:
+    layout: direct
+    target_disk: "/dev/sda"
+  network:
+    dhcp: true
+
+# Declarative Node Inventory mapped by MAC address (lowercase, colon-separated)
+hosts:
+  # ----------------------------------------------------------------------------
+  # 1. Ubuntu Server 24.04 LTS (Docker Host Profile)
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:24:04":
+    hostname: "srv-docker-01"
+    os: ubuntu
+    version: "24.04"
+    profile: docker-host
+    network:
+      dhcp: false
+      ip: "192.168.1.50"
+      netmask: "255.255.255.0"
+      gateway: "192.168.1.1"
+      nameservers: ["1.1.1.1", "8.8.8.8"]
+    storage:
+      target_disk: "/dev/sda"
+    extra_packages:
+      - "htop"
+      - "iotop"
+    force_install: false
+
+  # ----------------------------------------------------------------------------
+  # 2. Ubuntu Server 24.04 LTS (Kubernetes Node Profile)
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:24:05":
+    hostname: "k8s-worker-01"
+    os: ubuntu
+    version: "24.04"
+    profile: k8s-node
+    network:
+      dhcp: true
+    storage:
+      target_disk: "/dev/sda"
+
+  # ----------------------------------------------------------------------------
+  # 3. Talos Linux v1.14.0 (Kubernetes Control Plane)
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:14:00":
+    hostname: "talos-cp-01"
+    os: talos
+    version: "v1.14.0"
+    role: controlplane # 'controlplane' or 'worker'
+    storage:
+      target_disk: "/dev/sda"
+    network:
+      dhcp: false
+      ip: "192.168.1.60"
+      netmask: "255.255.255.0"
+      gateway: "192.168.1.1"
+      nameservers: ["1.1.1.1"]
+    custom:
+      clusterName: "homelab-k8s"
+
+  # ----------------------------------------------------------------------------
+  # 4. openSUSE Leap Micro 6.2 (Edge Container Host with Combustion)
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:06:20":
+    hostname: "suse-micro-01"
+    os: suse-micro
+    version: "6.2"
+    user: homelab
+    network:
+      dhcp: true
+    storage:
+      target_disk: "/dev/sda"
