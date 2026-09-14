@@ -114,9 +114,9 @@ File cấu hình do Bun server sinh động tại [src/providers/ubuntu/autoinst
 
 ---
 
-### 1.5. Mổ Xẻ Chuyên Sâu Profile `k3s-server`
+### 1.5. Mổ Xẻ Chuyên Sâu Profile `k3s-single-node`
 
-Profile `k3s-server` định nghĩa tại [src/providers/ubuntu/profiles/index.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/ubuntu/profiles/index.ts) biến một máy Ubuntu trắng thành một cụm Kubernetes Production-ready:
+Profile `k3s-single-node` định nghĩa tại [src/providers/ubuntu/profiles/index.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/ubuntu/profiles/index.ts) biến một máy Ubuntu trắng thành một cụm Kubernetes Single Node Production-ready:
 
 ```typescript
 lateCommands: [
@@ -136,23 +136,41 @@ overlay
 br_netfilter
 EOF'`,
 
-  // 4. Cài đặt nhị phân K3s và Systemd service (Bỏ qua khởi chạy trong môi trường chroot)
-  `curtin in-target --target=/target -- sh -c 'curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644" sh -'`,
+  // 4. Tạo thư mục và cấu hình khai báo K3s chuẩn (/etc/rancher/k3s/config.yaml) với dynamic TLS SAN
+  `curtin in-target --target=/target -- mkdir -p /etc/rancher/k3s`,
+  `curtin in-target --target=/target -- sh -c 'cat <<EOF > /etc/rancher/k3s/config.yaml
+write-kubeconfig-mode: "0644"
+tls-san:
+${sanEntries}
+EOF'`,
 
-  // 5. Cấu hình biến môi trường KUBECONFIG toàn hệ thống để kubectl chạy ngay không cần sudo
+  // 5. Dynamic fallback: bổ sung IP thực tế vào tls-san nếu máy nhận IP qua DHCP
+  `curtin in-target --target=/target -- sh -c 'NODE_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk "{print \\$7}"); if [ -n "$NODE_IP" ] && ! grep -q "$NODE_IP" /etc/rancher/k3s/config.yaml; then echo "  - \\"$NODE_IP\\"" >> /etc/rancher/k3s/config.yaml; fi'`,
+
+  // 6. Cài đặt K3s binary & systemd service (hỗ trợ ghim phiên bản qua host.custom.k3s_version)
+  `curtin in-target --target=/target -- sh -c 'curl -sfL https://get.k3s.io | ${k3sVersionEnv}INSTALL_K3S_SKIP_START=true sh -'`,
+
+  // 7. Kích hoạt systemd unit k3s để tự chạy ngay khi máy boot lần đầu
+  `curtin in-target --target=/target -- systemctl enable k3s || true`,
+
+  // 8. Cấu hình biến môi trường KUBECONFIG toàn hệ thống và symlink ~/.kube/config cho user
   `curtin in-target --target=/target -- sh -c 'echo "KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> /etc/environment'`,
   `curtin in-target --target=/target -- sh -c 'echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" > /etc/profile.d/k3s.sh'`,
+  `curtin in-target --target=/target -- mkdir -p /home/${defaultUser}/.kube /root/.kube`,
+  `curtin in-target --target=/target -- ln -sf /etc/rancher/k3s/k3s.yaml /home/${defaultUser}/.kube/config`,
+  `curtin in-target --target=/target -- ln -sf /etc/rancher/k3s/k3s.yaml /root/.kube/config`,
+  `curtin in-target --target=/target -- chown -R ${defaultUser}:${defaultUser} /home/${defaultUser}/.kube || true`,
 
-  // 6. Kích hoạt QEMU Guest Agent để Proxmox VE theo dõi IP và tình trạng máy ảo
+  // 9. Kích hoạt QEMU Guest Agent để Proxmox VE theo dõi IP và tình trạng máy ảo
   `curtin in-target --target=/target -- systemctl enable qemu-guest-agent || true`,
 
-  // 7. Gửi Webhook Phone-Home về Bun Server để xác nhận hoàn tất & khóa Boot Loop!
+  // 10. Gửi Webhook Phone-Home về Bun Server để xác nhận hoàn tất & khóa Boot Loop!
   `curtin in-target --target=/target -- curl -s -X POST "${baseUrl}/api/installed?mac=..." || true`,
 ]
 ```
 
 > [!IMPORTANT]
-> Lưu ý kỹ thuật: Tham số `INSTALL_K3S_SKIP_START=true` là bắt buộc vì tại thời điểm `late-commands` thực thi, hệ điều hành đích vẫn đang nằm trong môi trường chroot (`/target`), systemd PID 1 thực sự của máy chưa chạy, nếu cố khởi động service K3s tại đây sẽ dẫn đến lỗi cài đặt Subiquity bị fail!
+> Lưu ý kỹ thuật: Tham số `INSTALL_K3S_SKIP_START=true` là bắt buộc vì tại thời điểm `late-commands` thực thi, hệ điều hành đích vẫn đang nằm trong môi trường chroot (`/target`), systemd PID 1 thực sự của máy chưa chạy, nếu cố khởi động service K3s tại đây sẽ dẫn đến lỗi cài đặt Subiquity bị fail! Do đó lệnh `systemctl enable k3s` được gọi để kích hoạt service cho lần boot đầu tiên.
 
 ---
 

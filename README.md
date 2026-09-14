@@ -5,7 +5,7 @@ Hệ thống máy chủ HTTP iPXE siêu tốc, gọn nhẹ và linh hoạt đư�
 - 🐧 **Ubuntu Server 24.04 LTS** (Noble Numbat) qua **Subiquity Autoinstall** & **Cloud-Init**:
   - Hỗ trợ **NFS Boot** (`boot_method: nfs`): Tối ưu cho máy ảo Proxmox RAM khiêm tốn (4–5GB), nạp rootfs trực tiếp qua NFS mà không tải toàn bộ ISO vào RAM.
   - Hỗ trợ **HTTP Boot** (`boot_method: http`): Nạp ISO trực tiếp qua HTTP cho máy chủ vật lý (RAM ≥ 8GB) mà không cần cấu hình NFS server.
-  - Tích hợp profile **`k3s-server`**: Cài đặt sẵn K3s, disable swap, tinh chỉnh sysctl/modules mạng Kubernetes, thiết lập `KUBECONFIG` tự động cho user `homelab`.
+  - Tích hợp profile **`k3s-single-node`**: Cài đặt sẵn K3s Single Node, declarative config `/etc/rancher/k3s/config.yaml`, tự động cấu hình dynamic `tls-san` (IP & hostname), symlink `~/.kube/config`, disable swap, tinh chỉnh sysctl/modules mạng Kubernetes.
 - ☸️ **Talos Linux v1.14.0** (Kubernetes OS bất biến) qua **Talos MachineConfig**.
 - 🦎 **openSUSE Leap Micro 6.2** qua **Combustion** automated scripting.
 - 🔌 Kiến trúc **OS Provider Registry** dạng module, dễ dàng mở rộng thêm OS mới (Debian, Alpine, Fedora CoreOS...).
@@ -61,7 +61,7 @@ Trong `src/providers/ubuntu/profiles/index.ts`, hệ thống định nghĩa sẵ
 
 | Profile | Gói cài đặt sẵn | Tinh chỉnh hệ thống tự động |
 | :--- | :--- | :--- |
-| **`k3s-server`** *(Mặc định cho K3s)* | `curl`, `qemu-guest-agent`, `htop`, `iotop`, `net-tools`, `open-iscsi`, `nfs-common`, `ca-certificates` | - Tắt swap trong `/etc/fstab`<br>- Cấu hình sysctl: `net.bridge.bridge-nf-call-iptables=1`, `net.ipv4.ip_forward=1`<br>- Nạp kernel module `overlay`, `br_netfilter`<br>- Cài K3s server với cờ `--write-kubeconfig-mode 644`<br>- Cấu hình `KUBECONFIG=/etc/rancher/k3s/k3s.yaml` toàn hệ thống |
+| **`k3s-single-node`** *(Mặc định cho K3s)* | `curl`, `qemu-guest-agent`, `htop`, `iotop`, `net-tools`, `open-iscsi`, `nfs-common`, `ca-certificates` | - Tắt swap trong `/etc/fstab`<br>- Cấu hình sysctl: `net.bridge.bridge-nf-call-iptables=1`, `net.ipv4.ip_forward=1`<br>- Nạp kernel module `overlay`, `br_netfilter`<br>- Tạo file cấu hình `/etc/rancher/k3s/config.yaml` với `write-kubeconfig-mode: "0644"` và dynamic `tls-san` (IP & hostname)<br>- Cài K3s server bản stable (hoặc `custom.k3s_version`), tự động enable systemd service<br>- Cấu hình `~/.kube/config` symlink và `KUBECONFIG` toàn hệ thống |
 | **`generic`** | `qemu-guest-agent`, `curl`, `htop`, `vim`, `tmux`, `net-tools`, `git` | Cấu hình máy chủ cơ bản kèm SSH key |
 
 ---
@@ -91,10 +91,10 @@ hosts:
   # 1. Ubuntu Server 24.04 LTS (K3s Single-Node Cluster trên Proxmox VM)
   # ----------------------------------------------------------------------------
   "bc:24:11:00:24:33":
-    hostname: "k3s-master-01"
+    hostname: "k3s-single-node"
     os: ubuntu
     version: "24.04"
-    profile: k3s-server
+    profile: k3s-single-node
     # Máy ảo RAM 4-5GB: dùng NFS để stream rootfs trực tiếp, không ngốn RAM
     custom:
       boot_method: nfs
@@ -116,7 +116,7 @@ hosts:
   #   hostname: "baremetal-k3s-01"
   #   os: ubuntu
   #   version: "24.04"
-  #   profile: k3s-server
+  #   profile: k3s-single-node
   #   # Máy thật RAM >= 8GB: dùng HTTP kéo ISO qua mạng mà KHÔNG cần NFS server
   #   custom:
   #     boot_method: http
@@ -310,7 +310,7 @@ docker compose logs -f
   ```
 - **Webhook Phone-Home** (Cloud-Init gọi khi hoàn thành cài đặt):
   ```bash
-  curl -X POST "http://localhost:3000/api/installed?mac=bc:24:11:00:24:33&hostname=k3s-master-01&os=ubuntu"
+  curl -X POST "http://localhost:3000/api/installed?mac=bc:24:11:00:24:33&hostname=k3s-single-node&os=ubuntu"
   ```
 
 ---
@@ -341,7 +341,7 @@ Cluster K3s đã được triển khai và kiểm chứng tự động thành c�
 $ ssh homelab@192.168.250.33 "kubectl get nodes -o wide; kubectl get pods -A"
 
 NAME            STATUS   ROLES           AGE     VERSION        INTERNAL-IP      EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
-k3s-master-01   Ready    control-plane   4m30s   v1.36.4+k3s1   192.168.250.33   <none>        Ubuntu 24.04.5 LTS   7.0.0-31-generic (amd64)   containerd://2.3.4-k3s1.36
+k3s-single-node   Ready    control-plane   4m30s   v1.36.4+k3s1   192.168.250.33   <none>        Ubuntu 24.04.5 LTS   7.0.0-31-generic (amd64)   containerd://2.3.4-k3s1.36
 
 NAMESPACE     NAME                                      READY   STATUS      RESTARTS   AGE
 kube-system   coredns-54996dc9b4-pvn2v                  1/1     Running     0          4m24s

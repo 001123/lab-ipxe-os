@@ -24,10 +24,10 @@ hosts:
   # 1. Ubuntu Server 24.04 LTS (K3s Single-Node Cluster - Proxmox VM)
   # ----------------------------------------------------------------------------
   "bc:24:11:00:24:33":
-    hostname: "k3s-master-01"
+    hostname: "k3s-single-node"
     os: ubuntu
     version: "24.04"
-    profile: k3s-server
+    profile: k3s-single-node
     # Máy ảo RAM 4-5GB -> dùng boot_method: nfs để stream trực tiếp, không tốn RAM
     custom:
       boot_method: nfs
@@ -50,7 +50,7 @@ hosts:
   #   hostname: "baremetal-k3s-01"
   #   os: ubuntu
   #   version: "24.04"
-  #   profile: k3s-server
+  #   profile: k3s-single-node
   #   # Máy vật lý RAM >= 8GB: dùng HTTP (mặc định), tự kéo ISO qua mạng mà KHÔNG cần NFS server!
   #   custom:
   #     boot_method: http

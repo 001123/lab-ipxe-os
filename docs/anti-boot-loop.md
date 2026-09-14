@@ -37,7 +37,7 @@ Khi Bun server xác định node đã hoàn tất cài đặt, nó không trả 
 ```ipxe
 #!ipxe
 echo ==========================================================
-echo Node [k3s-master-01] (bc:24:11:00:24:33) is ALREADY INSTALLED.
+echo Node [k3s-single-node] (bc:24:11:00:24:33) is ALREADY INSTALLED.
 echo Bypassing network installation. Booting local disk...
 echo (To reinstall, trigger API: POST http://192.168.250.202:3000/api/reset?mac=bc:24:11:00:24:33)
 echo ==========================================================
@@ -69,7 +69,7 @@ Trạng thái được lưu trữ bền vững (persistent) dưới dạng JSON 
   "installed": {
     "bc:24:11:00:24:33": {
       "mac": "bc:24:11:00:24:33",
-      "hostname": "k3s-master-01",
+      "hostname": "k3s-single-node",
       "os": "ubuntu",
       "client_ip": "192.168.250.33",
       "installed_at": "2026-09-14T07:25:39.124Z"
@@ -108,7 +108,7 @@ Tại thời điểm Subiquity hoàn thành việc ghi dữ liệu vào ổ cứ
 
 ```bash
 curtin in-target --target=/target -- curl -s -X POST \
-  "http://192.168.250.202:3000/api/installed?mac=bc%3A24%3A11%3A00%3A24%3A33&hostname=k3s-master-01&os=ubuntu"
+  "http://192.168.250.202:3000/api/installed?mac=bc%3A24%3A11%3A00%3A24%3A33&hostname=k3s-single-node&os=ubuntu"
 ```
 
 Khi máy chủ Bun nhận được request tại route `/api/installed` ([src/routes/api.ts](file:///Users/timi/lab/lab-ipxe-os/src/routes/api.ts)):
@@ -134,7 +134,7 @@ Kết quả: Máy chủ xóa MAC khỏi `data/state.json`. Lần khởi động 
 ```yaml
 hosts:
   "bc:24:11:00:24:33":
-    hostname: "k3s-master-01"
+    hostname: "k3s-single-node"
     os: ubuntu
     force_install: true   # <--- Đặt thành true để ép buộc cài đặt lại
 ```

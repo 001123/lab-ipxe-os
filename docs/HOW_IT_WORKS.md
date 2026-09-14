@@ -150,7 +150,7 @@ Hệ thống tuân thủ triệt để nguyên lý **Infrastructure as Code (IaC
 2. **Khối cấu hình máy chủ (`hosts`)**: Ghi đè chi tiết theo từng địa chỉ MAC cụ thể:
    - Hostname, địa chỉ IP tĩnh / Netmask / Gateway / DNS.
    - Hệ điều hành mục tiêu (`ubuntu`, `talos`, `suse-micro`).
-   - Profile chuyên biệt (`k3s-server`, `generic`).
+   - Profile chuyên biệt (`k3s-single-node`, `generic`).
    - Phương thức nạp rootfs (`boot_method: nfs` cho VM hoặc `boot_method: http` cho máy thật).
    - Thiết bị lưu trữ mục tiêu (`target_disk: /dev/sda` hoặc `/dev/nvme0n1`).
 
@@ -167,7 +167,7 @@ Hệ thống tuân thủ triệt để nguyên lý **Infrastructure as Code (IaC
 - ⚙️ [**Động Cơ Cài Đặt Hệ Điều Hành** (`os-engines.md`)](os-engines.md):
   * Phân tích Casper, Subiquity Autoinstall và Cloud-Init.
   * So sánh chi tiết kỹ thuật Rootfs: HTTP Range 206 Partial Content vs. NFS Stream Boot.
-  * Mổ xẻ Profile `k3s-server` trong late-commands.
+  * Mổ xẻ Profile `k3s-single-node` trong late-commands.
   * Giới thiệu Talos Linux MachineConfig và openSUSE Combustion.
   * Hướng dẫn từng bước tự viết thêm OS Provider mới.
 - 🛡️ [**Cơ Chế Chống Boot Loop & Máy Trạng Thái** (`anti-boot-loop.md`)](anti-boot-loop.md):

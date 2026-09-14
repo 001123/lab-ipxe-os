@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, spyOn } from "bun:test";
-import { resolve, join } from "node:path";
+import { resolve } from "node:path";
 import { writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { ConfigManager } from "../src/config.ts";
 import { StateManager } from "../src/core/state.ts";
-import { ProviderRegistry } from "../src/providers/registry.ts";
-import { StaticAssetServer } from "../src/core/static-server.ts";
 import { getUbuntuProfile } from "../src/providers/ubuntu/profiles/index.ts";
 import { server } from "../src/index.ts";
 
@@ -34,9 +32,9 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
 
     it("should lookup specific host by MAC for Ubuntu K3s server profile", () => {
       const host = configMgr.getHost("bc:24:11:00:24:33");
-      expect(host.hostname).toBe("k3s-master-01");
+      expect(host.hostname).toBe("k3s-single-node");
       expect(host.os).toBe("ubuntu");
-      expect(host.profile).toBe("k3s-server");
+      expect(host.profile).toBe("k3s-single-node");
       expect(host.network?.dhcp).toBe(false);
       expect(host.network?.ip).toBe("192.168.250.33");
       expect(host.network?.gateway).toBe("192.168.250.1");
@@ -83,7 +81,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(res.status).toBe(200);
       const script = await res.text();
       expect(script).toContain("#!ipxe");
-      expect(script).toContain("k3s-master-01");
+      expect(script).toContain("k3s-single-node");
       expect(script).toContain("autoinstall ds=nocloud-net");
       expect(script).toContain("vmlinuz");
       expect(script).toContain("initrd");
@@ -95,12 +93,14 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       const yaml = await res.text();
       expect(yaml).toContain("#cloud-config");
       expect(yaml).toContain("autoinstall:");
-      expect(yaml).toContain("k3s-master-01");
+      expect(yaml).toContain("k3s-single-node");
       expect(yaml).toContain("192.168.250.33/24");
       expect(yaml).toContain("192.168.250.1");
       expect(yaml).toContain("AAAAC3NzaC1lZDI1NTE5AAAAIPaWkIWwJqchLwmCMSN3hmUDVg08y3SU5L544sJSFpbW");
       expect(yaml).toContain("get.k3s.io");
-      expect(yaml).toContain("write-kubeconfig-mode 644");
+      expect(yaml).toContain("write-kubeconfig-mode: \"0644\"");
+      expect(yaml).toContain("tls-san:");
+      expect(yaml).toContain("192.168.250.33");
       expect(yaml).toContain("INSTALL_K3S_SKIP_START=true");
       expect(yaml).toContain("KUBECONFIG=/etc/rancher/k3s/k3s.yaml");
       expect(yaml).toContain("/api/installed");
@@ -110,7 +110,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       const res = await fetch(`${baseUrl}/os/ubuntu/bc:24:11:00:24:33/meta-data`);
       expect(res.status).toBe(200);
       const yaml = await res.text();
-      expect(yaml).toContain("k3s-master-01");
+      expect(yaml).toContain("k3s-single-node");
       expect(yaml).toContain("i-bc2411002433");
     });
 
@@ -160,12 +160,25 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
     };
     const baseUrl = "http://localhost:3000";
 
-    it("should return k3s-server profile with k3s packages and setup late-commands", () => {
-      const profile = getUbuntuProfile("k3s-server", mockHost, baseUrl);
+    it("should return k3s-single-node profile with k3s packages and setup late-commands", () => {
+      const profile = getUbuntuProfile("k3s-single-node", mockHost, baseUrl);
       expect(profile.packages).toContain("open-iscsi");
       expect(profile.packages).toContain("nfs-common");
+      expect(profile.lateCommands.some((c) => c.includes("config.yaml"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("get.k3s.io"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("tls-san"))).toBe(true);
       expect(profile.lateCommands.some((c) => c.includes("KUBECONFIG=/etc/rancher/k3s/k3s.yaml"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes(".kube/config"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("systemctl enable k3s"))).toBe(true);
+    });
+
+    it("should support custom k3s_version in k3s-single-node profile", () => {
+      const versionHost = {
+        ...mockHost,
+        custom: { k3s_version: "v1.31.0+k3s1" },
+      };
+      const profile = getUbuntuProfile("k3s-single-node", versionHost, baseUrl);
+      expect(profile.lateCommands.some((c) => c.includes('INSTALL_K3S_VERSION="v1.31.0+k3s1"'))).toBe(true);
     });
 
     it("should return generic profile with base utilities", () => {
@@ -179,8 +192,11 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
 
     it("should fallback to generic profile with warning when given unknown/removed profile", () => {
       const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
-      const fallbackDocker = getUbuntuProfile("docker-host", mockHost, baseUrl);
+      const fallbackK3sServer = getUbuntuProfile("k3s-server", mockHost, baseUrl);
       expect(warnSpy).toHaveBeenCalled();
+      expect(fallbackK3sServer.packages).toContain("git");
+
+      const fallbackDocker = getUbuntuProfile("docker-host", mockHost, baseUrl);
       expect(fallbackDocker.packages).toContain("git");
 
       const fallbackK8s = getUbuntuProfile("k8s-node", mockHost, baseUrl);

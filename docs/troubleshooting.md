@@ -188,7 +188,7 @@ Sau khi máy đã hoàn tất cài đặt và khởi động lại vào Ubuntu:
   ```
 - **Nguyên nhân**: File cấu hình kubeconfig mặc định của K3s chỉ cấp quyền đọc cho user `root` (mode 600).
 - **Khắc phục**:
-  - Profile `k3s-server` của dự án đã cài sẵn cờ `--write-kubeconfig-mode 644`.
+  - Profile `k3s-single-node` của dự án đã cài sẵn file `/etc/rancher/k3s/config.yaml` với `write-kubeconfig-mode: "0644"`, đồng thời tạo sẵn symlink `~homelab/.kube/config`.
   - Nếu cấu hình thủ công:
     ```bash
     sudo chmod 644 /etc/rancher/k3s/k3s.yaml

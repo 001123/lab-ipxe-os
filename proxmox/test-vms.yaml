@@ -5,7 +5,7 @@
 
 vms:
   - vmid: 9033
-    name: "test-ubuntu-k3s"
+    name: "k3s-single-node"
     os: "ubuntu"
     mac: "bc:24:11:00:24:33"
     cores: 2
