@@ -78,7 +78,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
     });
 
     it("GET /boot.ipxe for Ubuntu K3s node should return iPXE script", async () => {
-      const res = await fetch(`${baseUrl}/boot.ipxe?mac=bc:24:11:00:24:33`);
+      const res = await fetch(`${baseUrl}/boot.ipxe?mac=bc:24:11:00:24:33&force=true`);
       expect(res.status).toBe(200);
       const script = await res.text();
       expect(script).toContain("#!ipxe");
@@ -100,7 +100,8 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(yaml).toContain("AAAAC3NzaC1lZDI1NTE5AAAAIPaWkIWwJqchLwmCMSN3hmUDVg08y3SU5L544sJSFpbW");
       expect(yaml).toContain("get.k3s.io");
       expect(yaml).toContain("write-kubeconfig-mode 644");
-      expect(yaml).toContain("/home/homelab/.kube");
+      expect(yaml).toContain("INSTALL_K3S_SKIP_START=true");
+      expect(yaml).toContain("KUBECONFIG=/etc/rancher/k3s/k3s.yaml");
       expect(yaml).toContain("/api/installed");
     });
 

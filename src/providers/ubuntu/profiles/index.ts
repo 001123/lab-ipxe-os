@@ -33,7 +33,7 @@ export function getUbuntuProfile(profileName: string, host: HostConfig, baseUrl:
         ],
         lateCommands: [
           // Disable swap in fstab
-          `curtin in-target --target=/target -- sed -i '/ swap / s/^\\(.*\\)$/#\\1/g' /etc/fstab`,
+          `curtin in-target --target=/target -- sed -i '/ swap / s/^\\(.*\\)$/#\\1/g' /etc/fstab || true`,
           // Configure sysctl for Kubernetes networking
           `curtin in-target --target=/target -- sh -c 'cat <<EOF > /etc/sysctl.d/99-kubernetes.conf
 net.bridge.bridge-nf-call-iptables  = 1
@@ -45,10 +45,11 @@ EOF'`,
 overlay
 br_netfilter
 EOF'`,
-          // Install K3s server with write-kubeconfig-mode 644
-          `curtin in-target --target=/target -- sh -c 'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644" sh -'`,
-          // Setup kubeconfig for default user
-          `curtin in-target --target=/target -- sh -c 'mkdir -p /home/${defaultUser}/.kube && cp /etc/rancher/k3s/k3s.yaml /home/${defaultUser}/.kube/config && chown -R ${defaultUser}:${defaultUser} /home/${defaultUser}/.kube || true'`,
+          // Pre-install K3s server binary & systemd service (skip start in chroot)
+          `curtin in-target --target=/target -- sh -c 'curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644" sh -'`,
+          // Set system-wide KUBECONFIG for homelab and all users
+          `curtin in-target --target=/target -- sh -c 'echo "KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> /etc/environment'`,
+          `curtin in-target --target=/target -- sh -c 'echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" > /etc/profile.d/k3s.sh'`,
           ...baseLateCommands,
         ],
       };

@@ -42,22 +42,27 @@ export function renderUbuntuUserData(host: HostConfig, baseUrl: string): string 
     const cidr = netmaskToCidr(host.network.netmask);
     const nameservers = host.network.nameservers || ["1.1.1.1", "8.8.8.8"];
 
+    const ethConfig: any = {
+      match: {
+        macaddress: host.mac,
+      },
+      addresses: [`${host.network.ip}/${cidr}`],
+      routes: host.network.gateway
+        ? [{ to: "default", via: host.network.gateway }]
+        : [],
+      nameservers: {
+        addresses: nameservers,
+      },
+    };
+
+    if (host.network.interface) {
+      ethConfig.set_name = host.network.interface;
+    }
+
     networkConfig = {
       version: 2,
       ethernets: {
-        static_eth: {
-          match: {
-            macaddress: host.mac,
-          },
-          set_name: host.network.interface || "eth0",
-          addresses: [`${host.network.ip}/${cidr}`],
-          routes: host.network.gateway
-            ? [{ to: "default", via: host.network.gateway }]
-            : [],
-          nameservers: {
-            addresses: nameservers,
-          },
-        },
+        static_eth: ethConfig,
       },
     };
   }
@@ -79,8 +84,8 @@ export function renderUbuntuUserData(host: HostConfig, baseUrl: string): string 
   const autoinstallConfig: any = {
     autoinstall: {
       version: 1,
-      interactive_sections: [],
-      refresh_installer: {
+      "interactive-sections": [],
+      "refresh-installer": {
         update: false,
       },
       keyboard: {
@@ -104,7 +109,7 @@ export function renderUbuntuUserData(host: HostConfig, baseUrl: string): string 
     },
   };
 
-  return `#cloud-config\n${YAML.stringify(autoinstallConfig)}`;
+  return `#cloud-config\n${YAML.stringify(autoinstallConfig, { lineWidth: 0 })}`;
 }
 
 export function renderUbuntuMetaData(host: HostConfig): string {

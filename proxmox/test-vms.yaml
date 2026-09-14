@@ -9,6 +9,6 @@ vms:
     os: "ubuntu"
     mac: "bc:24:11:00:24:33"
     cores: 2
-    memory: 10240 # MB (Cần 10GB khi boot mạng vì ISO 3.8GB tải tạm vào tmpfs 50% RAM, sau khi cài xong giảm lại 4GB)
+    memory: 5120 # MB (5GB phù hợp với máy chủ vật lý 8GB RAM, đủ chạy Subiquity mượt mà)
     disk_size: 30 # GB
     bios: "ovmf" # 'ovmf' (UEFI) or 'seabios'

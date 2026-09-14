@@ -28,6 +28,10 @@ hosts:
     os: ubuntu
     version: "24.04"
     profile: k3s-server
+    # Máy ảo RAM 4-5GB -> dùng boot_method: nfs để stream trực tiếp, không tốn RAM
+    custom:
+      boot_method: nfs
+      nfs_root: "192.168.250.4:/srv/nfs/ubuntu-${version}"
     network:
       dhcp: false
       ip: "192.168.250.33"
@@ -47,6 +51,9 @@ hosts:
   #   os: ubuntu
   #   version: "24.04"
   #   profile: k3s-server
+  #   # Máy vật lý RAM >= 8GB: dùng HTTP (mặc định), tự kéo ISO qua mạng mà KHÔNG cần NFS server!
+  #   custom:
+  #     boot_method: http
   #   network:
   #     dhcp: false
   #     ip: "192.168.250.34"
