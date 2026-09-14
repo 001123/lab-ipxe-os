@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "test": "bun test",
+    "test": "PORT=0 bun test",
     "sync-assets": "bun src/scripts/sync-assets.ts",
     "proxmox:create": "bun proxmox/create-vm.ts"
   },

@@ -62,8 +62,6 @@ Trong `src/providers/ubuntu/profiles/index.ts`, hệ thống định nghĩa sẵ
 | Profile | Gói cài đặt sẵn | Tinh chỉnh hệ thống tự động |
 | :--- | :--- | :--- |
 | **`k3s-server`** *(Mặc định cho K3s)* | `curl`, `qemu-guest-agent`, `htop`, `iotop`, `net-tools`, `open-iscsi`, `nfs-common`, `ca-certificates` | - Tắt swap trong `/etc/fstab`<br>- Cấu hình sysctl: `net.bridge.bridge-nf-call-iptables=1`, `net.ipv4.ip_forward=1`<br>- Nạp kernel module `overlay`, `br_netfilter`<br>- Cài K3s server với cờ `--write-kubeconfig-mode 644`<br>- Cấu hình `KUBECONFIG=/etc/rancher/k3s/k3s.yaml` toàn hệ thống |
-| **`docker-host`** | `docker.io`, `containerd`, `docker-compose-v2`, `curl`, `qemu-guest-agent`, `htop` | - Kích hoạt dịch vụ `docker`<br>- Thêm người dùng vào group `docker` |
-| **`k8s-node`** | `containerd`, `curl`, `apt-transport-https`, `ca-certificates`, `socat`, `conntrack`, `qemu-guest-agent` | - Tắt swap<br>- Bật forwarding & bridge nf-call<br>- Nạp module kernel chuẩn bị cho kubeadm |
 | **`generic`** | `qemu-guest-agent`, `curl`, `htop`, `vim`, `tmux`, `net-tools`, `git` | Cấu hình máy chủ cơ bản kèm SSH key |
 
 ---

@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll, spyOn } from "bun:test";
 import { resolve, join } from "node:path";
 import { writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { ConfigManager } from "../src/config.ts";
 import { StateManager } from "../src/core/state.ts";
 import { ProviderRegistry } from "../src/providers/registry.ts";
 import { StaticAssetServer } from "../src/core/static-server.ts";
+import { getUbuntuProfile } from "../src/providers/ubuntu/profiles/index.ts";
 import { server } from "../src/index.ts";
 
 describe("Bun Multi-OS iPXE Server Tests", () => {
@@ -147,6 +148,45 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(res.headers.get("Content-Length")).toBe("512");
       const buffer = await res.arrayBuffer();
       expect(buffer.byteLength).toBe(512);
+    });
+  });
+
+  describe("Ubuntu Profiles", () => {
+    const mockHost = {
+      mac: "11:22:33:44:55:66",
+      hostname: "test-node",
+      os: "ubuntu",
+      profile: "generic",
+    };
+    const baseUrl = "http://localhost:3000";
+
+    it("should return k3s-server profile with k3s packages and setup late-commands", () => {
+      const profile = getUbuntuProfile("k3s-server", mockHost, baseUrl);
+      expect(profile.packages).toContain("open-iscsi");
+      expect(profile.packages).toContain("nfs-common");
+      expect(profile.lateCommands.some((c) => c.includes("get.k3s.io"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("KUBECONFIG=/etc/rancher/k3s/k3s.yaml"))).toBe(true);
+    });
+
+    it("should return generic profile with base utilities", () => {
+      const profile = getUbuntuProfile("generic", mockHost, baseUrl);
+      expect(profile.packages).toContain("curl");
+      expect(profile.packages).toContain("htop");
+      expect(profile.packages).toContain("git");
+      expect(profile.lateCommands.some((c) => c.includes("qemu-guest-agent"))).toBe(true);
+      expect(profile.lateCommands.some((c) => c.includes("/api/installed"))).toBe(true);
+    });
+
+    it("should fallback to generic profile with warning when given unknown/removed profile", () => {
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      const fallbackDocker = getUbuntuProfile("docker-host", mockHost, baseUrl);
+      expect(warnSpy).toHaveBeenCalled();
+      expect(fallbackDocker.packages).toContain("git");
+
+      const fallbackK8s = getUbuntuProfile("k8s-node", mockHost, baseUrl);
+      expect(fallbackK8s.packages).toContain("git");
+
+      warnSpy.mockRestore();
     });
   });
 });
