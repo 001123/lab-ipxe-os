@@ -46,21 +46,21 @@ hosts:
   # 2. Template cho máy thật (Bare-Metal K3s Server)
   # Bỏ comment và thay thế MAC của card mạng máy thật khi bạn sẵn sàng triển khai
   # ----------------------------------------------------------------------------
-  # "xx:xx:xx:xx:xx:xx":
-  #   hostname: "baremetal-k3s-01"
-  #   os: ubuntu
-  #   version: "24.04"
-  #   profile: k3s-single-node
-  #   # Máy vật lý RAM >= 8GB: dùng HTTP (mặc định), tự kéo ISO qua mạng mà KHÔNG cần NFS server!
-  #   custom:
-  #     boot_method: http
-  #   network:
-  #     dhcp: false
-  #     ip: "192.168.250.34"
-  #     netmask: "255.255.255.0"
-  #     gateway: "192.168.250.1"
-  #     nameservers: ["192.168.250.1", "1.1.1.1"]
-  #   storage:
-  #     # Tuỳ loại ổ cứng máy thật: /dev/nvme0n1 (NVMe) hoặc /dev/sda (SATA SSD)
-  #     target_disk: "/dev/nvme0n1"
-  #   force_install: false
+  "e8:9c:25:7b:af:d8":
+    hostname: "k3s-single-node-i5"
+    os: ubuntu
+    version: "24.04"
+    profile: k3s-single-node
+    # Máy vật lý RAM >= 8GB: dùng HTTP (mặc định), tự kéo ISO qua mạng mà KHÔNG cần NFS server!
+    custom:
+      boot_method: http
+    network:
+      dhcp: false
+      ip: "192.168.250.34"
+      netmask: "255.255.255.0"
+      gateway: "192.168.250.1"
+      nameservers: ["192.168.250.1", "1.1.1.1"]
+    storage:
+      # Tuỳ loại ổ cứng máy thật: /dev/nvme0n1 (NVMe) hoặc /dev/sda (SATA SSD)
+      target_disk: "/dev/sda"
+    force_install: false

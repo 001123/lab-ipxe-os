@@ -10,7 +10,7 @@ export function renderUbuntuUserData(host: HostConfig, baseUrl: string): string 
   // Password: "ubuntu"
   const passwordHash =
     host.password_hash ||
-    "$6$rounds=4096$homelab$8v3vN6iG1tY9uF8J4Q0Gj0qUvF4/F1C/bXGzP1oJ4mK8Pq1R3w7e9t2y5u1i4o7p0";
+    "$6$homelab$aQQg4YQ.h0xIv1rg7ORMLqK0PMpt.AjsR1JKLNHINwKQZIR9a0j.e6lZf.fPoFvqEjXH4CKZH9rgm7Jf3MeI1.";
 
   const packages = Array.from(
     new Set([...profileSpec.packages, ...(host.extra_packages || [])])
