@@ -51,7 +51,9 @@ rm -rf /run/NetworkManager/system-connections/* 2>/dev/null || true
   const profile = getSuseMicroProfile(host.profile || "generic", host, baseUrl);
   const packageInstallSnippet = profile.packages && profile.packages.length > 0
     ? `echo "[Combustion] Installing profile packages via zypper..." | (tee -a /dev/console 2>/dev/null || cat)
-zypper --non-interactive --no-gpg-checks in -y ${profile.packages.join(" ")} || true`
+for pkg in ${profile.packages.join(" ")}; do
+  zypper --non-interactive --no-gpg-checks in -y "$pkg" || true
+done`
     : "";
 
   const profileSnippets = profile.scriptSnippets.join("\n\n");

@@ -26,7 +26,6 @@ export function getRke2SingleNodeProfile(host: HostConfig, _baseUrl: string): Su
       "tar",
       "gzip",
       "qemu-guest-agent",
-      "htop",
       "nfs-client",
       "open-iscsi",
     ],
