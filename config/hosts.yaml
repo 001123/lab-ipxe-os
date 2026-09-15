@@ -54,6 +54,12 @@ hosts:
       rke2_token: ""
       rke2_cni: "canal"
       rke2_ingress: "traefik"
+      # ArgoCD & GitOps Integration (tùy chọn):
+      argocd: true
+      # argocd_hostname: "argocd.192.168.250.35.nip.io"  # Tự động gán nếu bỏ trống
+      # gitops_repo: "https://github.com/your-username/homelab-gitops.git"
+      # gitops_branch: "main"
+      # gitops_path: "apps"
     network:
       dhcp: false
       ip: "192.168.250.35"
@@ -99,6 +105,12 @@ hosts:
       rke2_token: ""
       rke2_cni: "canal"
       rke2_ingress: "traefik"
+      # ArgoCD & GitOps Integration (tùy chọn):
+      # argocd: true
+      # argocd_hostname: "argocd.192.168.250.2.nip.io"
+      # gitops_repo: "https://github.com/your-username/homelab-gitops.git"
+      # gitops_branch: "main"
+      # gitops_path: "apps"
     network:
       dhcp: false
       ip: "192.168.250.2"

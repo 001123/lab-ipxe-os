@@ -339,6 +339,62 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(script).toContain('- "ingress-nginx"');
     });
 
+    it("should include ArgoCD HelmChart manifest and get-argocd-password helper when custom.argocd is enabled", () => {
+      const argocdHost = {
+        ...mockSuseHost,
+        custom: {
+          argocd: true,
+        },
+      };
+      const profile = getSuseMicroProfile("rke2-single-node", argocdHost, baseUrl);
+      const script = profile.scriptSnippets.join("\n");
+      expect(script).toContain("Pre-configuring ArgoCD HelmChart auto-deploy manifest");
+      expect(script).toContain("name: argo-cd");
+      expect(script).toContain("chart: argo-cd");
+      expect(script).toContain("argocd.192.168.250.50.nip.io");
+      expect(script).toContain("server.insecure: true");
+      expect(script).toContain("ingressClassName: traefik");
+      expect(script).toContain("/usr/local/bin/get-argocd-password");
+      // When argocd_version is not set, version field is omitted so Helm pulls latest
+      expect(script).not.toContain("version:");
+    });
+
+    it("should allow pinning custom argocd_version in HelmChart when specified", () => {
+      const versionedHost = {
+        ...mockSuseHost,
+        custom: {
+          argocd: true,
+          argocd_version: "7.7.16",
+        },
+      };
+      const profile = getSuseMicroProfile("rke2-single-node", versionedHost, baseUrl);
+      const script = profile.scriptSnippets.join("\n");
+      expect(script).toContain('version: "7.7.16"');
+    });
+
+    it("should configure GitOps root application and repo credentials when gitops_repo and gitops_token are set", () => {
+      const gitopsHost = {
+        ...mockSuseHost,
+        custom: {
+          argocd: true,
+          argocd_hostname: "argocd.lab.internal",
+          gitops_repo: "https://github.com/my-user/homelab-gitops.git",
+          gitops_branch: "main",
+          gitops_path: "apps",
+          gitops_token: "ghp_secretToken123",
+        },
+      };
+      const profile = getSuseMicroProfile("rke2-single-node", gitopsHost, baseUrl);
+      const script = profile.scriptSnippets.join("\n");
+      expect(script).toContain("domain: argocd.lab.internal");
+      expect(script).toContain("additionalApplications:");
+      expect(script).toContain("name: root-bootstrap");
+      expect(script).toContain("repoURL: \"https://github.com/my-user/homelab-gitops.git\"");
+      expect(script).toContain("targetRevision: \"main\"");
+      expect(script).toContain("path: \"apps\"");
+      expect(script).toContain("password: \"ghp_secretToken123\"");
+    });
+
     it("should return generic profile with base utilities and btrfs resize", () => {
       const profile = getSuseMicroProfile("generic", mockSuseHost, baseUrl);
       expect(profile.packages).toContain("curl");

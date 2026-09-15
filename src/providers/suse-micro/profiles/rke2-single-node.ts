@@ -19,6 +19,130 @@ export function getRke2SingleNodeProfile(host: HostConfig, _baseUrl: string): Su
   const sanEntries = sans.map((san) => `  - "${san}"`).join("\n");
   const tokenEntry = configuredRke2Token ? `token: "${configuredRke2Token}"\n` : "";
 
+  const enableArgocd = host.custom?.argocd === true || host.custom?.enable_argocd === true;
+  const argocdDomain =
+    host.custom?.argocd_hostname ||
+    (host.network?.ip ? `argocd.${host.network.ip}.nip.io` : `argocd.${host.hostname}.nip.io`);
+  const ingressClassName = ingress.includes("nginx") ? "nginx" : ingress;
+  const argocdVersion = host.custom?.argocd_version || "";
+  const versionEntry = argocdVersion ? `  version: "${argocdVersion}"\n` : "";
+  const gitopsRepo: string = host.custom?.gitops_repo || "";
+  const gitopsBranch: string = host.custom?.gitops_branch || "HEAD";
+  const gitopsPath: string = host.custom?.gitops_path || ".";
+  const gitopsToken: string = host.custom?.gitops_token || "";
+  const gitopsSshKey: string = host.custom?.gitops_ssh_key || "";
+
+  let additionalAppsYaml = "";
+  if (gitopsRepo) {
+    additionalAppsYaml = `
+      additionalApplications:
+        - name: root-bootstrap
+          namespace: argocd
+          project: default
+          source:
+            repoURL: "${gitopsRepo}"
+            targetRevision: "${gitopsBranch}"
+            path: "${gitopsPath}"
+          destination:
+            server: "https://kubernetes.default.svc"
+            namespace: argocd
+          syncPolicy:
+            automated:
+              prune: true
+              selfHeal: true`;
+  }
+
+  let repoCredsYaml = "";
+  if (gitopsRepo && (gitopsToken || gitopsSshKey)) {
+    if (gitopsToken) {
+      repoCredsYaml = `
+      repositories:
+        root-repo:
+          url: "${gitopsRepo}"
+          username: "git"
+          password: "${gitopsToken}"`;
+    } else if (gitopsSshKey) {
+      const indentedKey = gitopsSshKey
+        .trim()
+        .split("\n")
+        .map((l: string) => `            ${l}`)
+        .join("\n");
+      repoCredsYaml = `
+      repositories:
+        root-repo:
+          url: "${gitopsRepo}"
+          sshPrivateKey: |
+${indentedKey}`;
+    }
+  }
+
+  const argocdSnippets = enableArgocd
+    ? [
+        `# 12. Pre-configure ArgoCD HelmChart auto-deploy manifest
+echo "[Combustion RKE2] Pre-configuring ArgoCD HelmChart auto-deploy manifest (${argocdDomain})..." | (tee -a /dev/console 2>/dev/null || cat)
+mkdir -p /var/lib/rancher/rke2/server/manifests
+cat <<'EOF' > /var/lib/rancher/rke2/server/manifests/argocd.yaml
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argo-cd
+  namespace: kube-system
+spec:
+  chart: argo-cd
+  repo: https://argoproj.github.io/argo-helm
+  targetNamespace: argocd
+  createNamespace: true
+${versionEntry}  valuesContent: |-
+    global:
+      domain: ${argocdDomain}
+    configs:
+      params:
+        server.insecure: true${repoCredsYaml}
+    server:
+      ingress:
+        enabled: true
+        ingressClassName: ${ingressClassName}
+        hostname: ${argocdDomain}
+        paths:
+          - /
+        pathType: Prefix${additionalAppsYaml}
+    controller:
+      replicas: 1
+    repoServer:
+      replicas: 1
+    applicationSet:
+      replicas: 1
+    redis:
+      enabled: true
+    dex:
+      enabled: false
+    notifications:
+      enabled: false
+EOF
+
+# Fallback: if dynamic DHCP node IP detected, update nip.io domain if using hostname placeholder
+if [ -n "$NODE_IP" ] && grep -q "argocd.${host.hostname}.nip.io" /var/lib/rancher/rke2/server/manifests/argocd.yaml; then
+  sed -i "s|argocd.${host.hostname}.nip.io|argocd.\${NODE_IP}.nip.io|g" /var/lib/rancher/rke2/server/manifests/argocd.yaml
+fi`,
+
+        `# 13. Install helper script to retrieve ArgoCD admin password and URL
+cat <<'EOF' > /usr/local/bin/get-argocd-password
+#!/bin/sh
+export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+echo "=================================================="
+echo "           ArgoCD Access Information              "
+echo "=================================================="
+echo "URL:      http://${argocdDomain}"
+echo "Username: admin"
+echo -n "Password: "
+/var/lib/rancher/rke2/bin/kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d
+echo ""
+echo "=================================================="
+EOF
+chmod 755 /usr/local/bin/get-argocd-password || true`,
+      ]
+    : [];
+
   return {
     packages: [
       "curl",
@@ -103,6 +227,7 @@ EOF`,
       `ln -sf /etc/rancher/rke2/rke2.yaml "/home/${defaultUser}/.kube/config"`,
       `ln -sf /etc/rancher/rke2/rke2.yaml /root/.kube/config`,
       `chown -R "${defaultUser}:${defaultUser}" "/home/${defaultUser}/.kube" || true`,
+      ...argocdSnippets,
     ],
   };
 }
