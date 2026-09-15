@@ -32,7 +32,7 @@ Hệ thống máy chủ HTTP iPXE siêu tốc, gọn nhẹ và linh hoạt đư�
             ▼ (2) Chainload HTTP: http://<BUN_IP>:3000/boot.ipxe?mac=${net0/mac}
 [ Bun iPXE Server ]
       │
-      ├── Tra cứu MAC trong config/hosts.yaml & kiểm tra data/state.json
+      ├── Tra cứu MAC trong data/state.db (SQLite WAL Mode - Single Source of Truth)
       │
       ├── ĐÃ CÀI ĐẶT?  ──> Trả về script iPXE bypass mạng, boot thẳng ổ cứng (sanboot)
       │
@@ -50,7 +50,7 @@ Hệ thống máy chủ HTTP iPXE siêu tốc, gọn nhẹ và linh hoạt đư�
             │
             └── Hậu cài đặt (Late Commands):
                   POST /api/installed?mac=:mac (Phone-home Webhook)
-                  ──> Server ghi nhận vào data/state.json để khóa boot loop vĩnh viễn!
+                  ──> Server cập nhật trạng thái INSTALLED vào data/state.db để khóa boot loop vĩnh viễn!
 ```
 
 ---
@@ -76,15 +76,16 @@ Hệ thống quản lý profile cài đặt theo mô hình **Profile Registry Ma
 
 ---
 
-## 3. Cấu Hình Khai Báo Máy Chủ (`config/hosts.yaml`)
+## 3. Cấu Hình Khai Báo Máy Chủ & SQLite Single Source of Truth
 
-Mọi node trong mạng được quản lý theo mô hình khai báo (**Declarative Infrastructure**).
+Toàn bộ cấu hình máy chủ, thông số mạng, storage, profile K8s và trạng thái vòng đời cài đặt được lưu trữ tập trung tại **`data/state.db` (SQLite WAL Mode)** làm **Single Source of Truth** duy nhất:
+- **Tự động Seed ban đầu**: Khi khởi động lần đầu (nếu database chưa có dữ liệu), hệ thống tự động đọc cấu hình mẫu từ `config/hosts.yaml` (hoặc `config/hosts.example.yaml`) và seed vào SQLite.
+- **Quản lý Full CRUD**: Bạn có thể Thêm (+ Add Node), Sửa (Edit), Xoá vĩnh viễn (Delete) và Khôi phục cài đặt (Reset) trực tiếp trên Web UI Dashboard hoặc qua RESTful API mà không cần mở file thủ công.
+- **Xuất / Nhập Backup YAML**: Bất cứ lúc nào bạn cũng có thể xuất toàn bộ cấu hình trong SQLite ra file `hosts.yaml` chuẩn thông qua nút **Export YAML** trên Web UI hoặc endpoint `GET /api/export/yaml`.
 
-### 3.1. Khởi Tạo File Cấu Hình
+### 3.1. Khởi Tạo Cấu Hình Mẫu Ban Đầu (`config/hosts.yaml`)
 
-File `config/hosts.yaml` lưu trữ thông tin nhạy cảm của bạn (như SSH public key, danh sách MAC, địa chỉ IP) và được bảo vệ trong `.gitignore`.
-
-Khởi tạo cấu hình ban đầu bằng cách copy file mẫu:
+File `config/hosts.yaml` đóng vai trò là seed ban đầu và mẫu backup (được bảo vệ trong `.gitignore`):
 ```bash
 # Dùng file cấu hình mẫu tổng hợp (khuyên dùng):
 cp config/hosts.example.yaml config/hosts.yaml
@@ -98,7 +99,7 @@ cp config/hosts.example.yaml config/hosts.yaml
 #   cp config/examples/hosts.talos.yaml config/hosts.yaml
 ```
 
-> **Cơ chế Tự Động Fallback**: Khi bạn vừa clone dự án về hoặc chạy trên môi trường CI mà chưa tạo file `config/hosts.yaml`, `ConfigManager` sẽ tự động đọc từ `config/hosts.example.yaml` (kèm cảnh báo nhẹ) để server và test suite luôn hoạt động ổn định.
+> **Cơ chế Tự Động Fallback**: Khi bạn vừa clone dự án về mà chưa tạo file `config/hosts.yaml`, hệ thống sẽ tự động fallback sang `config/hosts.example.yaml` để seed database, đảm bảo server và test suite luôn chạy ngay lập tức.
 
 ### 3.2. Cấu Trúc File Cấu Hình Mẫu
 
@@ -331,56 +332,95 @@ Mở trực tiếp trên trình duyệt tại:
 http://localhost:3000/
 ```
 - **Bulma CSS v1.0**: Thiết kế giao diện hiện đại theo chuẩn [Bulma CSS v1.0.4 Overview](https://bulma.io/documentation/start/overview/), hỗ trợ tự động Dark/Light theme theo hệ thống kèm nút toggle trên Navbar.
-- **Nâng cấp HTMX v4**: Hệ thống đã nâng cấp từ HTMX v2 (`2.0.4`) lên HTMX v4 (`4.0.0`). Tham khảo tài liệu và hướng dẫn tại [four.htmx.org/docs](https://four.htmx.org/docs).
-- **Kiến trúc file tĩnh `public/`**: Toàn bộ script và style tùy biến được tách sạch sẽ khỏi template HTML và lưu trong thư mục `public/` (phục vụ qua endpoint `/public/*`):
-  - `public/js/dashboard.js`: Xử lý auto-polling 3s và điều khiển Dark/Light mode.
+- **Nâng cấp HTMX v4**: Hệ thống sử dụng HTMX v4 (`4.0.0`). Tham khảo tài liệu và hướng dẫn tại [four.htmx.org/docs](https://four.htmx.org/docs).
+- **Kiến trúc file tĩnh `public/`**: Toàn bộ script và style tùy biến được tách sạch sẽ khỏi template HTML và lưu trong thư mục `public/`:
+  - `public/js/dashboard.js`: Xử lý modal controllers, HTMX events, auto-polling 3s và điều khiển Dark/Light mode.
   - `public/css/dashboard.css`: Animation pulse dot và các tùy biến giao diện.
-- **Live Status Monitoring**: Hiển thị bảng toàn bộ node với trạng thái thời gian thực (`PENDING`, `PROVISIONING`, `INSTALLED`, `FAILED`).
-- **Nút Reset 1-Click**: Xóa khóa trạng thái trực tiếp trên UI qua HTMX partial update.
-- **Nút Tải Kubeconfig**: Tải file kubeconfig ngay lập tức cho các node K3s/RKE2 đã hoàn tất cài đặt.
-- **Toggle Auto-polling**: Tùy chọn bật/tắt tự động làm mới trạng thái mỗi 3 giây.
+- **Quản Trị Full CRUD Trực Quan Ngay Trên UI**:
+  - **Nút `+ Add Node`**: Mở Bulma Modal đăng ký máy chủ mới với đầy đủ thông số (MAC, Hostname, OS, Profile, Static IP/DHCP, Gateway, DNS, Target Disk, Note, ArgoCD & GitOps).
+  - **Nút `Edit`**: Nằm trên từng hàng trong bảng, mở Modal chỉnh sửa nhanh toàn bộ thông số máy chủ.
+  - **Nút `Delete`**: Xoá vĩnh viễn node khỏi database SQLite (tự động xoá hàng khỏi DOM qua HTMX).
+  - **Nút `Reset` (1-Click)**: Xóa khóa cài đặt, đưa trạng thái về `PENDING` để tái cài đặt mà vẫn giữ nguyên toàn bộ cấu hình node.
+  - **Nút `Export YAML`**: Xuất và tải ngay file `hosts.yaml` backup toàn bộ cấu hình hiện tại trong database.
+  - **Nút `Kubeconfig`**: Tải file kubeconfig ngay lập tức cho các node K3s/RKE2 đã cài đặt thành công.
+  - **Toggle `Auto-polling (3s)`**: Tự động làm mới bảng trạng thái theo thời gian thực.
 
-### 9.2. API Quản Trị & Phone-Home Webhook
-- **Kiểm tra trạng thái server**:
+### 9.2. Bộ RESTful API Hoàn Chỉnh
+
+Hệ thống cung cấp đầy đủ chuẩn RESTful API cho phép tự động hóa hoặc tích hợp bên thứ ba:
+
+#### 1. Quản lý Host (Full CRUD)
+- **Lấy danh sách toàn bộ hosts**:
   ```bash
-  curl http://localhost:3000/health
+  curl -s http://localhost:3000/api/hosts
   ```
-- **Xem danh sách toàn bộ máy chủ và trạng thái cài đặt**:
+- **Xem chi tiết cấu hình 1 host theo MAC**:
   ```bash
-  curl http://localhost:3000/api/hosts
+  curl -s http://localhost:3000/api/hosts/bc:24:11:00:24:33
   ```
-- **Xem chi tiết bản ghi nodes từ SQLite (`data/state.db`)**:
+- **Tạo mới một host trong SQLite**:
   ```bash
-  curl http://localhost:3000/api/nodes
+  curl -X POST "http://localhost:3000/api/hosts" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "mac": "52:54:00:12:34:56",
+      "hostname": "worker-rke2-01",
+      "os": "suse-micro",
+      "version": "6.2",
+      "profile": "rke2-single-node",
+      "ip": "192.168.250.88",
+      "gateway": "192.168.250.1",
+      "target_disk": "/dev/vda",
+      "note": "Worker node tạo qua API"
+    }'
   ```
-- **Xem dữ liệu trạng thái tương thích (`/api/state`)**:
+- **Cập nhật cấu hình host**:
   ```bash
-  curl http://localhost:3000/api/state
+  curl -X PUT "http://localhost:3000/api/hosts/52:54:00:12:34:56" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "hostname": "worker-rke2-renamed",
+      "ip": "192.168.250.89",
+      "note": "Cập nhật IP và mô tả mới"
+    }'
   ```
-- **Xóa khóa cài đặt (Reset trạng thái để cho phép cài đặt lại máy)**:
+- **Xoá vĩnh viễn host khỏi database**:
+  ```bash
+  curl -X DELETE "http://localhost:3000/api/hosts/52:54:00:12:34:56"
+  ```
+
+#### 2. Backup & Export
+- **Xuất toàn bộ database ra file YAML**:
+  ```bash
+  curl -s http://localhost:3000/api/export/yaml > hosts.backup.yaml
+  ```
+
+#### 3. Vòng đời Cài đặt & Tiện ích
+- **Reset trạng thái cài đặt (về `PENDING`)**:
   ```bash
   curl -X POST "http://localhost:3000/api/reset?mac=bc:24:11:00:24:33"
   ```
-- **Cập nhật ghi chú cho node (Lưu vào SQLite `data/state.db`)**:
+- **Webhook Phone-Home** (Cloud-Init / Combustion gọi khi cài xong):
+  ```bash
+  curl -X POST "http://localhost:3000/api/installed?mac=bc:24:11:00:24:33&hostname=k3s-single-node&os=ubuntu"
+  ```
+- **Cập nhật ghi chú cho node**:
   ```bash
   curl -X POST "http://localhost:3000/api/note" \
     -H "Content-Type: application/json" \
     -d '{"mac": "bc:24:11:00:24:33", "note": "Node master K3s phòng lab"}'
   ```
-- **Webhook Phone-Home** (Cloud-Init / Combustion gọi khi hoàn thành cài đặt, tự động kế thừa `note` từ `hosts.yaml`):
+- **Lấy Kubeconfig của Node K3s / RKE2**:
   ```bash
-  curl -X POST "http://localhost:3000/api/installed?mac=bc:24:11:00:24:33&hostname=k3s-single-node&os=ubuntu"
-  ```
-- **Lấy Kubeconfig của Node K3s / RKE2 (theo hostname hoặc MAC)**:
-  ```bash
-  # Tải file YAML về máy:
-  curl -s http://localhost:3000/api/kubeconfig/rke2-single-node-i5 > kubeconfig-rke2-single-node-i5
-  
-  # Hoặc pipe trực tiếp cho kubectl:
-  curl -s http://localhost:3000/api/kubeconfig/rke2-single-node-i5 | kubectl --kubeconfig=/dev/stdin get nodes
+  # Tải file YAML:
+  curl -s http://localhost:3000/api/kubeconfig/rke2-single-node-i5 > kubeconfig-rke2.yaml
 
-  # Tra cứu theo MAC hoặc định dạng JSON:
-  curl -s "http://localhost:3000/api/kubeconfig/e8:9c:25:7b:af:d8?format=json"
+  # Pipe trực tiếp cho kubectl:
+  curl -s http://localhost:3000/api/kubeconfig/rke2-single-node-i5 | kubectl --kubeconfig=/dev/stdin get nodes
+  ```
+- **Kiểm tra trạng thái server**:
+  ```bash
+  curl http://localhost:3000/health
   ```
 
 ---

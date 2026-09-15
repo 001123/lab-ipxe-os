@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import YAML from "yaml";
 import type { HostConfig, HostsFileStructure } from "./types.ts";
+import type { StateManager } from "./core/state.ts";
 
 export interface AppConfig {
   port: number;
@@ -14,9 +15,11 @@ export interface AppConfig {
 export class ConfigManager {
   private configPath: string;
   public appConfig: AppConfig;
+  private stateMgr?: StateManager;
 
-  constructor(configPath?: string) {
+  constructor(configPath?: string, stateMgr?: StateManager) {
     this.configPath = resolve(configPath || process.env.CONFIG_PATH || "./config/hosts.yaml");
+    this.stateMgr = stateMgr;
     this.appConfig = {
       port: parseInt(process.env.PORT || "3000", 10),
       host: process.env.HOST || "0.0.0.0",
@@ -26,8 +29,12 @@ export class ConfigManager {
     };
   }
 
+  public attachStateManager(stateMgr: StateManager): void {
+    this.stateMgr = stateMgr;
+  }
+
   public normalizeMac(mac: string): string {
-    return mac
+    return (mac || "")
       .trim()
       .toLowerCase()
       .replace(/[-]/g, ":")
@@ -35,6 +42,20 @@ export class ConfigManager {
   }
 
   public loadHostsConfig(): HostsFileStructure {
+    // If StateManager is attached, SQLite is the Single Source of Truth
+    if (this.stateMgr) {
+      const defaults = this.stateMgr.getGlobalDefaultConfig();
+      const hosts = this.stateMgr.getAllHosts(false);
+      const hostsMap: Record<string, Partial<HostConfig>> = {};
+      for (const h of hosts) {
+        hostsMap[this.normalizeMac(h.mac)] = h;
+      }
+      return {
+        default: defaults,
+        hosts: hostsMap,
+      };
+    }
+
     let targetPath = this.configPath;
 
     if (!existsSync(targetPath)) {
@@ -80,6 +101,34 @@ export class ConfigManager {
 
   public getHost(mac: string): HostConfig {
     const cleanMac = this.normalizeMac(mac);
+
+    if (this.stateMgr) {
+      const dbHost = this.stateMgr.getHost(cleanMac, true);
+      if (dbHost) return dbHost;
+
+      // Unknown MAC fallback using global default config
+      const defaults = this.stateMgr.getGlobalDefaultConfig();
+      const shortMac = cleanMac.replace(/:/g, "").slice(-6) || "node";
+      return {
+        mac: cleanMac,
+        hostname: `homelab-${shortMac}`,
+        os: defaults.os || "ubuntu",
+        version: defaults.version,
+        profile: defaults.profile || "generic",
+        role: defaults.role,
+        user: defaults.user || "homelab",
+        password_hash: defaults.password_hash,
+        ssh_authorized_keys: defaults.ssh_authorized_keys || [],
+        storage: { ...defaults.storage },
+        network: { ...defaults.network, dhcp: true },
+        extra_packages: defaults.extra_packages || [],
+        force_install: false,
+        note: defaults.note,
+        custom: { ...defaults.custom },
+        status: "PENDING",
+      };
+    }
+
     const configData = this.loadHostsConfig();
     const defaults = configData.default || { os: "ubuntu", version: "24.04" };
 

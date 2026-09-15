@@ -8,8 +8,8 @@ import { handleOsConfigRoute } from "./routes/os-configs.ts";
 import { handleApiRoute, buildDashboardData } from "./routes/api.ts";
 import { renderDashboardHtml } from "./ui/dashboard.ts";
 
-const configMgr = new ConfigManager();
 const stateMgr = new StateManager();
+const configMgr = new ConfigManager(undefined, stateMgr);
 const registry = new ProviderRegistry();
 const staticServer = new StaticAssetServer();
 const publicServer = new StaticAssetServer(join(process.cwd(), "public"), "public");

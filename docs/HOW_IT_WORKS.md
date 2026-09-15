@@ -24,8 +24,8 @@ flowchart TB
     subgraph BunLayer ["3. Tầng Điều Khiển Trung Tâm (Bun HTTP Engine)"]
         HTTP["Bun HTTP Server (:3000)"]
         RouterDispatcher["Route Dispatcher<br/>(/boot.ipxe, /os/*, /api/*)"]
-        ConfigMgr["ConfigManager<br/>(config/hosts.yaml)"]
-        StateMgr["StateManager<br/>(data/state.json)"]
+        ConfigMgr["ConfigManager<br/>(hosts.yaml Seed & Backup)"]
+        StateMgr["StateManager<br/>(data/state.db - SQLite WAL)"]
         AssetServer["StaticAssetServer<br/>(HTTP Range 206 Partial Content)"]
         Registry["OS Provider Registry<br/>(Ubuntu, Talos, SUSE)"]
     end
@@ -81,7 +81,7 @@ sequenceDiagram
     Node->>Node: Thực thi ipxe.efi & gửi DHCP lần 2 (Option 175)
     DHCP-->>Node: Trả về URL: http://<BUN_IP>:3000/boot.ipxe?mac=${net0/mac}
     Node->>Bun: HTTP GET /boot.ipxe?mac=bc:24:11:00:24:33
-    Bun->>Bun: Tra cứu hosts.yaml & state.json (Chưa cài đặt)
+    Bun->>Bun: Tra cứu data/state.db (SQLite - Chưa cài đặt)
     Bun-->>Node: Trả về kịch bản iPXE Boot Script (Kernel args + autoinstall)
 
     Note over Node,Bun: Chặng 3: Nạp Kernel, Initrd & Rootfs
@@ -111,7 +111,7 @@ sequenceDiagram
     OS->>OS: Cài đặt K3s nhị phân (INSTALL_K3S_SKIP_START=true)
     OS->>OS: Thiết lập KUBECONFIG=/etc/rancher/k3s/k3s.yaml
     OS->>Bun: POST /api/installed?mac=bc:24:11:00:24:33 (Phone-Home Webhook)
-    Bun->>Bun: Ghi nhận trạng thái vào data/state.json
+    Bun->>Bun: Cập nhật trạng thái INSTALLED vào data/state.db
     Bun-->>OS: HTTP 200 OK (Xác nhận đã khóa boot loop)
     OS->>Node: Cài đặt hoàn tất -> Reboot máy!
 
@@ -119,7 +119,7 @@ sequenceDiagram
     Node->>DHCP: DHCPDISCOVER lần 3
     DHCP-->>Node: Option 67: http://<BUN_IP>:3000/boot.ipxe?mac=...
     Node->>Bun: HTTP GET /boot.ipxe?mac=bc:24:11:00:24:33
-    Bun->>Bun: Kiểm tra state.json -> Node ĐÃ CÀI ĐẶT!
+    Bun->>Bun: Kiểm tra data/state.db -> Node ĐÃ CÀI ĐẶT!
     Bun-->>Node: Script: sanboot --no-describe --drive 0x80
     Node->>Node: Nhảy thẳng vào HĐH Ubuntu trên ổ cứng SSD
     Node->>Node: Systemd khởi chạy K3s Server -> Cluster READY!
@@ -143,7 +143,7 @@ Hệ thống hoạt động mượt mà nhờ việc phân định ranh giới r
 | :--- | :--- | :--- | :--- |
 | **Phase 1: Hardware POST** | Bo mạch chủ / Card mạng | Khởi tạo phần cứng, kích hoạt PXE ROM. | Phát sóng gói tin DHCPDISCOVER. |
 | **Phase 2: Stage 1 iPXE** | TFTP Server | Nạp `ipxe.efi` (vài trăm KB) vào bộ nhớ RAM. | Thực thi nhị phân iPXE trong không gian EFI. |
-| **Phase 3: Stage 2 HTTP** | Bun HTTP Server | Truy vấn MAC trong `hosts.yaml` & `state.json` để trả về iPXE script tương ứng. | Lệnh iPXE `kernel` và `initrd` nạp Linux. |
+| **Phase 3: Stage 2 HTTP** | Bun HTTP Server | Truy vấn MAC trong `data/state.db` (SQLite) để trả về iPXE script tương ứng. | Lệnh iPXE `kernel` và `initrd` nạp Linux. |
 | **Phase 4: Live OS Boot** | Linux Casper Environment | Mount hệ thống tệp gốc qua **NFS** hoặc nạp **ISO vào RAM**. | Khởi chạy tiến trình `subiquity` của Canonical. |
 | **Phase 5: Subiquity Engine** | Cloud-Init & Curtin | Đọc cấu hình từ `/os/ubuntu/:mac/user-data`, phân vùng ổ đĩa, chạy late-commands. | Gửi Webhook Phone-Home `/api/installed` rồi `reboot`. |
 | **Phase 6: Production Run** | Local Drive / K3s / RKE2 | iPXE nhận diện trạng thái đã cài -> thực thi `sanboot 0x80`. | Máy khởi động vào OS trên SSD và cụm Kubernetes sẵn sàng. |
@@ -184,7 +184,7 @@ Hệ thống tuân thủ triệt để nguyên lý **Infrastructure as Code (IaC
 - 🛡️ [**Cơ Chế Chống Boot Loop & Máy Trạng Thái** (`anti-boot-loop.md`)](anti-boot-loop.md):
   * Giải quyết nghịch lý vòng lặp cài đặt vô tận trong Zero-Touch Provisioning.
   * Kỹ thuật chuyển giao phần cứng `sanboot --drive 0x80 || exit 1`.
-  * Kiến trúc State Machine `data/state.json` và giao thức Phone-Home Webhook.
+  * Kiến trúc State Machine `data/state.db` (SQLite WAL) và giao thức Phone-Home Webhook.
   * Các kịch bản phục hồi ngoại lệ và quy trình ép cài đặt lại (`force_install`).
 - 🩺 [**Sổ Tay Chẩn Đoán & Xử Lý Sự Cố** (`troubleshooting.md`)](troubleshooting.md):
   * Sơ đồ phân tầng tìm lỗi từ L1/L2 Mạng đến Subiquity và Kubernetes.

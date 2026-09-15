@@ -15,17 +15,17 @@ Tài liệu này giải thích chi tiết nghịch lý cốt lõi trong mô hìn
 graph TD
     A["Bật nguồn máy tính (Power On)"] --> B{"Kiểm tra thứ tự Boot trong BIOS/UEFI"}
     B -->|"Ưu tiên #1: Network Boot (PXE)"| C["Gửi DHCP & Chainload tới Bun iPXE Server"]
-    C --> D{"Máy đã được cài đặt chưa? (Check StateManager)"}
+    C --> D{"Máy đã được cài đặt chưa? (Check data/state.db)"}
     
-    D -->|"CHƯA CÀI ĐẶT (isInstalled = false)"| E["Nạp Kernel & Autoinstall OS vào ổ đĩa"]
+    D -->|"CHƯA CÀI ĐẶT (status != INSTALLED)"| E["Nạp Kernel & Autoinstall OS vào ổ đĩa"]
     E --> F["Chạy Late Commands & Gửi Phone-Home Webhook"]
-    F --> G["Ghi nhận MAC vào data/state.json"]
+    F --> G["Cập nhật status = 'INSTALLED' vào data/state.db"]
     G --> H["Máy đích khởi động lại (Reboot)"]
     H --> A
     
-    D -->|"ĐÃ CÀI ĐẶT (isInstalled = true)"| I["Trả về script: sanboot --drive 0x80"]
+    D -->|"ĐÃ CÀI ĐẶT (status == INSTALLED)"| I["Trả về script: sanboot --drive 0x80"]
     I --> J["Bỏ qua mạng, nhảy thẳng vào HĐH trên ổ đĩa cứng!"]
-    J --> K["K3s / Ubuntu / Talos khởi chạy sản xuất"]
+    J --> K["K3s / Ubuntu / SUSE Micro khởi chạy sản xuất"]
 ```
 
 ---
@@ -71,20 +71,23 @@ Trên các hệ thống Bare-metal hiện đại (như bo mạch chủ Intel Gen
 
 Toàn bộ logic quản lý trạng thái cài đặt được tập trung trong lớp `StateManager` tại [src/core/state.ts](file:///Users/timi/lab/lab-ipxe-os/src/core/state.ts).
 
-### 3.1. Cấu Trúc Dữ Liệu `data/state.json`
-Trạng thái được lưu trữ bền vững (persistent) dưới dạng JSON trên ổ đĩa máy chủ:
+### 3.1. Cấu Trúc Bảng `hosts` trong `data/state.db` (SQLite)
+Trạng thái vòng đời và cấu hình máy chủ được lưu trữ bền vững (persistent) trong cơ sở dữ liệu SQLite chuẩn ACID (`PRAGMA journal_mode = WAL`):
 
+```sql
+SELECT mac, hostname, os, status, ip, installed_at, updated_at FROM hosts;
+```
+
+Ví dụ một bản ghi hoàn tất cài đặt:
 ```json
 {
-  "installed": {
-    "bc:24:11:00:24:33": {
-      "mac": "bc:24:11:00:24:33",
-      "hostname": "k3s-single-node",
-      "os": "ubuntu",
-      "client_ip": "192.168.250.33",
-      "installed_at": "2026-09-14T07:25:39.124Z"
-    }
-  }
+  "mac": "bc:24:11:00:24:33",
+  "hostname": "k3s-single-node",
+  "os": "ubuntu",
+  "status": "INSTALLED",
+  "ip": "192.168.250.33",
+  "installed_at": "2026-09-14T07:25:39.124Z",
+  "updated_at": "2026-09-14T07:25:39.124Z"
 }
 ```
 
@@ -93,19 +96,19 @@ Trạng thái được lưu trữ bền vững (persistent) dưới dạng JSON 
 ```
 [ UNCONFIGURED / NEW_NODE ]
             │
-            ▼ (Được khai báo trong hosts.yaml hoặc dùng cấu hình mặc định default)
-      [ REGISTERED ]
+            ▼ (Tạo qua Web UI "+ Add Node", REST API, hoặc Seed từ hosts.yaml)
+      [ REGISTERED (PENDING) ]
             │
             ▼ (Client kéo boot.ipxe & bắt đầu tải Kernel/Initrd)
-     [ PROVISIONING ]
+      [ PROVISIONING ]
             │
-            ▼ (Subiquity hoàn thành cài đặt -> Gửi Webhook Phone-Home)
-       [ INSTALLED ]  ◄── (Khóa chặn Boot Loop vĩnh viễn)
+            ▼ (Subiquity / Combustion hoàn thành cài đặt -> Gửi Webhook Phone-Home)
+        [ INSTALLED ]  ◄── (Khóa chặn Boot Loop vĩnh viễn)
             │
             ├── (Mỗi lần Reboot sau đó: Thực thi sanboot boot ổ cứng)
             │
-            ▼ (Quản trị viên muốn cài lại: Gọi API Reset hoặc cờ force_install)
-  [ REINSTALL_REQUESTED ] ──> Quay lại trạng thái PROVISIONING
+            ▼ (Quản trị viên muốn cài lại: Bấm nút "Reset" trên UI hoặc gọi API Reset)
+      [ PENDING ] ──> Cho phép cài đặt lại từ đầu mà không mất cấu hình máy!
 ```
 
 ---
@@ -123,7 +126,7 @@ curtin in-target --target=/target -- curl -s -X POST \
 
 Khi máy chủ Bun nhận được request tại route `/api/installed` ([src/routes/api.ts](file:///Users/timi/lab/lab-ipxe-os/src/routes/api.ts)):
 1. Chuẩn hóa địa chỉ MAC (chuyển chữ thường, thay `-` bằng `:`, bỏ prefix `0x`).
-2. Ghi nhận record vào `data/state.json`.
+2. Cập nhật record trong `data/state.db` chuyển trạng thái sang `INSTALLED` và ghi nhận thời điểm `installed_at`.
 3. Trả về mã phản hồi HTTP `200 OK`.
 4. Kể từ thời khắc này, mọi truy vấn iPXE từ địa chỉ MAC này sẽ chỉ nhận được lệnh `sanboot 0x80`.
 
@@ -131,25 +134,24 @@ Khi máy chủ Bun nhận được request tại route `/api/installed` ([src/ro
 
 ## 5. Quy Trình Cài Đặt Lại Máy (Re-installation Workflow)
 
-Khi bạn muốn cài đặt lại hệ điều hành cho một máy đã được đánh dấu `INSTALLED`, bạn có 3 cách linh hoạt:
+Khi bạn muốn cài đặt lại hệ điều hành cho một máy đã được đánh dấu `INSTALLED`, bạn có 4 cách linh hoạt:
 
-### Cách 1: Gọi API Quản Trị Reset (Tiện lợi nhất)
+### Cách 1: Bấm nút "Reset" trên Web UI Dashboard (Nhanh nhất)
+Tại trang chủ `http://localhost:3000/`, bấm nút **Reset** tương ứng với hàng của máy đó:
+- Trạng thái ngay lập tức chuyển thành `PENDING` (hiển thị màu xanh dương nhạt).
+- Toàn bộ cấu hình mạng, profile, ổ đĩa của node vẫn được bảo toàn nguyên vẹn trong SQLite.
+
+### Cách 2: Gọi API Quản Trị Reset qua cURL
 Gửi lệnh HTTP POST tới endpoint `/api/reset`:
 ```bash
 curl -X POST "http://192.168.250.202:3000/api/reset?mac=bc:24:11:00:24:33"
 ```
-Kết quả: Máy chủ xóa MAC khỏi `data/state.json`. Lần khởi động tiếp theo, máy sẽ lại hiện menu cài đặt.
+Kết quả: Máy chủ cập nhật status của node về `PENDING` trong `data/state.db`. Lần khởi động tiếp theo, máy sẽ lại hiện menu cài đặt.
 
-### Cách 2: Khai báo cờ `force_install` trong `config/hosts.yaml`
-```yaml
-hosts:
-  "bc:24:11:00:24:33":
-    hostname: "k3s-single-node"
-    os: ubuntu
-    force_install: true   # <--- Đặt thành true để ép buộc cài đặt lại
-```
+### Cách 3: Bật cờ `force_install` qua Web UI Edit hoặc REST API
+Bấm nút **Edit** trên Dashboard hoặc gọi `PUT /api/hosts/:mac` với `"force_install": true`.
 
-### Cách 3: Nạp URL Boot kèm tham số `?force=true`
+### Cách 4: Nạp URL Boot kèm tham số `?force=true`
 Trong iPXE CLI hoặc trên Router:
 ```ipxe
 chain --autofree http://192.168.250.202:3000/boot.ipxe?mac=${net0/mac}&force=true
@@ -161,16 +163,16 @@ chain --autofree http://192.168.250.202:3000/boot.ipxe?mac=${net0/mac}&force=tru
 
 | Tình Huống Ngoại Lệ | Hành Vi Của Hệ Thống | Giải Pháp Xử Lý |
 | :--- | :--- | :--- |
-| **Mất điện hoặc lỗi mạng giữa chừng khi đang cài đặt** | Vì lỗi xảy ra TRƯỚC bước `late-commands`, webhook chưa được kích hoạt -> Node chưa bị đánh dấu `INSTALLED`. Khi có điện lại, máy sẽ tự động khởi động lại quá trình cài đặt từ đầu một cách an toàn. | Hệ thống tự phục hồi tự động, không cần thao tác thủ công. |
-| **Webhook thất bại do Router bị nghẽn gói** | Cờ `|| true` trong late-command đảm bảo quá trình cài đặt của Subiquity không bị dừng đột ngột. Tuy nhiên lần boot sau máy sẽ bị cài lại. | Kiểm tra firewall/ACL giữa subnet máy đích và cổng 3000 của Bun Server. |
-| **Máy chủ Bun bị restart hoặc sập nguồn** | Dữ liệu `data/state.json` được ghi xuống ổ đĩa tức thì (`fsync`). Khi Bun server bật lại, dữ liệu được nạp lại nguyên vẹn vào bộ nhớ RAM. | Không bị mất trạng thái của các node đã cài. |
+| **Mất điện hoặc lỗi mạng giữa chừng khi đang cài đặt** | Vì lỗi xảy ra TRƯỚC bước `late-commands`, webhook chưa được kích hoạt -> Node vẫn ở trạng thái `PROVISIONING` hoặc `PENDING`. Khi có điện lại, máy sẽ tự động khởi động lại quá trình cài đặt từ đầu một cách an toàn. | Hệ thống tự phục hồi tự động, không cần thao tác thủ công. |
+| **Webhook thất bại do Router bị nghẽn gói** | Cờ `\|\| true` trong late-command đảm bảo quá trình cài đặt của Subiquity không bị dừng đột ngột. Tuy nhiên lần boot sau máy sẽ bị cài lại. | Kiểm tra firewall/ACL giữa subnet máy đích và cổng 3000 của Bun Server. |
+| **Máy chủ Bun bị restart hoặc sập nguồn** | `bun:sqlite` hoạt động ở chế độ Write-Ahead Logging (WAL) đảm bảo tính toàn vẹn dữ liệu (ACID). Khi server khởi động lại, trạng thái node được giữ nguyên vẹn. | Không bị mất trạng thái của các node đã cài. |
 
 ---
 
 ## 7. Khuyến Nghị Bảo Mật Cho Môi Trường Mạng (Security Hardening)
 
 1. **Giới hạn dải mạng truy cập API**:
-   - Các Endpoint quản trị và bảo mật như `/api/installed`, `/api/reset`, và `/api/kubeconfig` chỉ nên cho phép các IP thuộc mạng nội bộ Homelab/Data Center (`192.168.250.0/24`) truy cập. Tuyệt đối không mở cổng 3000 ra Internet công cộng mà không có reverse proxy xác thực.
+   - Các Endpoint quản trị và bảo mật như `/api/installed`, `/api/reset`, `/api/hosts`, và `/api/kubeconfig` chỉ nên cho phép các IP thuộc mạng nội bộ Homelab/Data Center (`192.168.250.0/24`) truy cập. Tuyệt đối không mở cổng 3000 ra Internet công cộng mà không có reverse proxy xác thực.
 2. **Khóa State bằng API Token (Khuyến nghị cho Enterprise)**:
    - Có thể bổ sung thêm biến môi trường `ADMIN_API_TOKEN` vào file `.env`.
-   - Các lệnh `/api/reset` hoặc `/api/installed` bắt buộc phải kèm Header `Authorization: Bearer <TOKEN>` để ngăn chặn việc người dùng trái phép gửi request giả mạo địa chỉ MAC làm gián đoạn máy chủ.
+   - Các lệnh `/api/reset`, `/api/hosts`, hoặc `/api/installed` bắt buộc phải kèm Header `Authorization: Bearer <TOKEN>` để ngăn chặn việc người dùng trái phép gửi request giả mạo địa chỉ MAC làm gián đoạn máy chủ.

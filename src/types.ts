@@ -29,7 +29,13 @@ export interface HostConfig {
   force_install?: boolean;
   note?: string;
   custom?: Record<string, any>;
+  status?: NodeStatus;
+  installed_at?: string;
+  created_at?: string;
+  updated_at?: string;
 }
+
+export type HostEntity = HostConfig;
 
 export interface DefaultHostConfig extends Omit<Partial<HostConfig>, "mac"> {
   os: string;

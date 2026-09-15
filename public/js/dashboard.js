@@ -1,16 +1,13 @@
 /**
- * iPXE Autoinstall Hub - Dashboard Script
- * 
- * NOTE ON HTMX UPGRADE:
- * - Upgraded from HTMX v2 (2.0.4) to HTMX v4 (4.0.0).
- * - Official documentation & migration guide: https://four.htmx.org/docs
- * - Bulma CSS documentation: https://bulma.io/documentation/start/overview/
+ * iPXE Autoinstall Hub - Dashboard Script & Modal Controller
+ * Bulma CSS v1.0.4 & HTMX v4.0.0
+ * Official documentation & migration guide: https://four.htmx.org/docs
  */
 
 (function () {
   const STORAGE_KEY = 'ipxe-dashboard-theme';
 
-  // Apply saved or system theme immediately to prevent FOUC (Flash of unstyled content)
+  // --- Theme Controller ---
   function getPreferredTheme() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === 'dark' || saved === 'light') {
@@ -42,22 +39,106 @@
     applyTheme(next);
   };
 
-  // Initial theme application
-  const initialTheme = getPreferredTheme();
-  applyTheme(initialTheme);
+  // --- Modal Helpers ---
+  window.openModal = function (modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.add('is-active');
+    }
+  };
 
-  // Listen for OS theme changes if user has not explicitly set a preference
-  if (window.matchMedia) {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      if (!localStorage.getItem(STORAGE_KEY)) {
-        applyTheme(e.matches ? 'dark' : 'light');
+  window.closeModal = function (modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.remove('is-active');
+    }
+  };
+
+  window.handleOsChange = function (selectElem, prefix) {
+    const os = selectElem.value;
+    const versionInput = document.getElementById(`${prefix}-version`);
+    if (versionInput) {
+      if (os === 'ubuntu') versionInput.value = '24.04';
+      if (os === 'suse-micro') versionInput.value = '6.2';
+    }
+  };
+
+  window.openEditModalFromRow = function (btn) {
+    const d = btn.dataset;
+    document.getElementById('edit-mac').value = d.mac || '';
+    document.getElementById('edit-hostname').value = d.hostname || '';
+    document.getElementById('edit-os').value = d.os || 'ubuntu';
+    document.getElementById('edit-version').value = d.version || '';
+    document.getElementById('edit-profile').value = d.profile || 'generic';
+    document.getElementById('edit-ip').value = d.ip || '';
+    document.getElementById('edit-gateway').value = d.gateway || '';
+    document.getElementById('edit-netmask').value = d.netmask || '';
+    document.getElementById('edit-nameservers').value = d.nameservers || '';
+    document.getElementById('edit-disk').value = d.disk || '/dev/sda';
+    document.getElementById('edit-note').value = d.note ? decodeURIComponent(d.note) : '';
+
+    // GitOps fields
+    document.getElementById('edit-argocd').checked = d.argocd === '1';
+    document.getElementById('edit-gitops-repo').value = d.gitopsRepo || '';
+    document.getElementById('edit-gitops-branch').value = d.gitopsBranch || '';
+    document.getElementById('edit-gitops-path').value = d.gitopsPath || '';
+
+    window.openModal('edit-node-modal');
+  };
+
+  window.submitEditNodeForm = async function (e) {
+    e.preventDefault();
+    const mac = document.getElementById('edit-mac').value.trim();
+    if (!mac) return;
+
+    const form = document.getElementById('edit-node-form');
+    const formData = new FormData(form);
+
+    try {
+      const res = await fetch(`/api/hosts/${encodeURIComponent(mac)}/edit`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'HX-Request': 'true',
+        },
+      });
+
+      if (res.ok) {
+        window.closeModal('edit-node-modal');
+        // Refresh table
+        if (window.htmx) {
+          window.htmx.ajax('GET', '/ui/nodes-table', { target: '#nodes-table-body', swap: 'innerHTML' });
+        } else {
+          window.location.reload();
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Error updating node: ${err.error || res.statusText}`);
       }
-    });
-  }
+    } catch (err) {
+      alert(`Network error updating node: ${err.message}`);
+    }
+  };
 
-  // Polling logic for HTMX
+  // Close modals on Escape key
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      const activeModals = document.querySelectorAll('.modal.is-active');
+      activeModals.forEach((m) => m.classList.remove('is-active'));
+    }
+  });
+
+  // HTMX Event Listeners
+  document.addEventListener('htmx:afterRequest', (evt) => {
+    // If add-node-form was submitted successfully, close modal and reset form
+    if (evt.detail.elt && evt.detail.elt.id === 'add-node-form' && evt.detail.successful) {
+      window.closeModal('add-node-modal');
+      evt.detail.elt.reset();
+    }
+  });
+
+  // Auto-Polling
   let pollInterval = null;
-
   window.handlePollingToggle = function (checkbox) {
     if (checkbox.checked) {
       if (!pollInterval) {
@@ -75,6 +156,18 @@
       }
     }
   };
+
+  // Initial theme application
+  const initialTheme = getPreferredTheme();
+  applyTheme(initialTheme);
+
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        applyTheme(e.matches ? 'dark' : 'light');
+      }
+    });
+  }
 
   document.addEventListener('DOMContentLoaded', () => {
     applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());

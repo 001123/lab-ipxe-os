@@ -643,5 +643,126 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(fullScript).toContain("/api/installed?mac=00%3A11%3A22%3A33%3A44%3A55&hostname=rke2-test-node&os=suse-micro");
     });
   });
+
+  describe("Full SQLite CRUD & Export Endpoints", () => {
+    const baseUrl = `http://localhost:${server.port}`;
+    const testCrudMac = "52:54:00:12:34:56";
+
+    it("POST /api/hosts should create a new host in SQLite database", async () => {
+      const payload = {
+        mac: testCrudMac,
+        hostname: "worker-rke2-01",
+        os: "suse-micro",
+        version: "6.2",
+        profile: "rke2-single-node",
+        ip: "192.168.250.88",
+        gateway: "192.168.250.1",
+        target_disk: "/dev/vda",
+        note: "Dynamic worker created via API",
+        argocd: true,
+        gitops_repo: "https://github.com/lab/gitops.git",
+        gitops_branch: "main",
+        gitops_path: "clusters/worker",
+      };
+
+      const res = await fetch(`${baseUrl}/api/hosts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      expect(res.status).toBe(201);
+      const data = (await res.json()) as any;
+      expect(data.success).toBe(true);
+      expect(data.host.mac).toBe(testCrudMac);
+      expect(data.host.hostname).toBe("worker-rke2-01");
+      expect(data.host.network.ip).toBe("192.168.250.88");
+      expect(data.host.custom.argocd).toBe(true);
+    });
+
+    it("GET /api/hosts/:mac should retrieve host details from SQLite", async () => {
+      const res = await fetch(`${baseUrl}/api/hosts/${testCrudMac}`);
+      expect(res.status).toBe(200);
+      const host = (await res.json()) as any;
+      expect(host.mac).toBe(testCrudMac);
+      expect(host.hostname).toBe("worker-rke2-01");
+      expect(host.os).toBe("suse-micro");
+      expect(host.profile).toBe("rke2-single-node");
+    });
+
+    it("PUT /api/hosts/:mac should update host properties in SQLite", async () => {
+      const patch = {
+        hostname: "worker-rke2-renamed",
+        note: "Updated description via PUT",
+        ip: "192.168.250.89",
+      };
+
+      const res = await fetch(`${baseUrl}/api/hosts/${testCrudMac}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as any;
+      expect(data.success).toBe(true);
+      expect(data.host.hostname).toBe("worker-rke2-renamed");
+      expect(data.host.note).toBe("Updated description via PUT");
+      expect(data.host.network.ip).toBe("192.168.250.89");
+    });
+
+    it("GET /boot.ipxe should immediately reflect created/updated node in iPXE script", async () => {
+      const res = await fetch(`${baseUrl}/boot.ipxe?mac=${testCrudMac}`);
+      expect(res.status).toBe(200);
+      const script = await res.text();
+      expect(script).toContain("worker-rke2-renamed");
+      expect(script).toContain("openSUSE Leap Micro");
+    });
+
+    it("POST /api/hosts/:mac/edit should handle form submission from Web UI", async () => {
+      const formData = new FormData();
+      formData.append("hostname", "worker-form-updated");
+      formData.append("os", "ubuntu");
+      formData.append("version", "24.04");
+      formData.append("profile", "k3s-single-node");
+      formData.append("ip", "192.168.250.90");
+
+      const res = await fetch(`${baseUrl}/api/hosts/${testCrudMac}/edit`, {
+        method: "POST",
+        body: formData,
+      });
+
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as any;
+      expect(data.success).toBe(true);
+      expect(data.host.hostname).toBe("worker-form-updated");
+      expect(data.host.os).toBe("ubuntu");
+      expect(data.host.profile).toBe("k3s-single-node");
+    });
+
+    it("GET /api/export/yaml should export all SQLite hosts as YAML", async () => {
+      const res = await fetch(`${baseUrl}/api/export/yaml`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/x-yaml");
+      const yamlContent = await res.text();
+      expect(yamlContent).toContain("default:");
+      expect(yamlContent).toContain("hosts:");
+      expect(yamlContent).toContain("worker-form-updated");
+      expect(yamlContent).toContain(testCrudMac);
+    });
+
+    it("DELETE /api/hosts/:mac should permanently delete host from database", async () => {
+      const res = await fetch(`${baseUrl}/api/hosts/${testCrudMac}`, {
+        method: "DELETE",
+      });
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as any;
+      expect(data.success).toBe(true);
+
+      // Verify it is gone
+      const verifyRes = await fetch(`${baseUrl}/api/hosts/${testCrudMac}`);
+      expect(verifyRes.status).toBe(404);
+    });
+  });
 });
 

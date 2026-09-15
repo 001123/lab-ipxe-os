@@ -230,7 +230,7 @@ curl -s http://<BUN_IP>:3000/api/kubeconfig/<hostname-hoặc-mac> | kubectl --ku
 ```
 - **Lưu ý mã lỗi HTTP**:
   - `400 Bad Request`: Thiếu định danh node hoặc node cấu hình profile không chạy cụm Kubernetes (ví dụ profile `generic`).
-  - `404 Not Found`: Không tìm thấy node trong `config/hosts.yaml` lẫn `data/state.json`.
+  - `404 Not Found`: Không tìm thấy node trong cơ sở dữ liệu SQLite `data/state.db`.
   - `502 Bad Gateway`: Node chưa hoàn thành cài đặt, SSH daemon chưa mở hoặc Kubernetes chưa kịp sinh file config.
 
 ---

@@ -1,5 +1,6 @@
 import type { ConfigManager } from "../config.ts";
 import type { StateManager } from "../core/state.ts";
+import type { HostConfig } from "../types.ts";
 import {
   renderNodeRow,
   renderNodesTablePartial,
@@ -7,57 +8,28 @@ import {
 } from "../ui/dashboard.ts";
 
 export function buildDashboardData(configMgr: ConfigManager, stateMgr: StateManager) {
-  const hostsConfig = configMgr.loadHostsConfig();
-  const allNodes = stateMgr.getAllNodes();
-  const nodeMap = new Map(allNodes.map((n) => [configMgr.normalizeMac(n.mac), n]));
-
-  const hosts: DashboardHostItem[] = [];
-  const processedMacs = new Set<string>();
-
-  if (hostsConfig.hosts) {
-    for (const [rawMac, spec] of Object.entries(hostsConfig.hosts)) {
-      const cleanMac = configMgr.normalizeMac(rawMac);
-      processedMacs.add(cleanMac);
-      const resolved = configMgr.getHost(cleanMac);
-      const nodeRec = nodeMap.get(cleanMac);
-
-      const status = nodeRec?.status || "PENDING";
-      hosts.push({
-        mac: cleanMac,
-        hostname: resolved.hostname,
-        ip: resolved.network?.ip || nodeRec?.ip,
-        os: resolved.os,
-        version: resolved.version,
-        profile: resolved.profile || resolved.role,
-        status,
-        note: resolved.note || nodeRec?.note,
-        installed_at: nodeRec?.installed_at,
-        updated_at: nodeRec?.updated_at,
-        isK8s: Boolean(
-          resolved.profile?.includes("k3s") ||
-          resolved.profile?.includes("rke2") ||
-          resolved.profile?.includes("k8s")
-        ),
-      });
-    }
-  }
-
-  // Also include nodes recorded in DB that are not explicitly in hosts.yaml
-  for (const node of allNodes) {
-    const cleanMac = configMgr.normalizeMac(node.mac);
-    if (!processedMacs.has(cleanMac)) {
-      hosts.push({
-        mac: cleanMac,
-        hostname: node.hostname || "unconfigured",
-        ip: node.ip,
-        os: node.os || "unknown",
-        status: node.status,
-        note: node.note,
-        installed_at: node.installed_at,
-        updated_at: node.updated_at,
-      });
-    }
-  }
+  const allHosts = stateMgr.getAllHosts();
+  const hosts: DashboardHostItem[] = allHosts.map((h) => {
+    const isK8s = Boolean(
+      h.profile?.includes("k3s") ||
+      h.profile?.includes("rke2") ||
+      h.profile?.includes("k8s")
+    );
+    return {
+      mac: configMgr.normalizeMac(h.mac),
+      hostname: h.hostname,
+      ip: h.network?.ip,
+      os: h.os,
+      version: h.version,
+      profile: h.profile || h.role,
+      status: (h.status || "PENDING") as any,
+      note: h.note,
+      installed_at: h.installed_at,
+      updated_at: h.updated_at,
+      isK8s,
+      rawConfig: h,
+    };
+  });
 
   const installedCount = hosts.filter((h) => h.status === "INSTALLED").length;
   const provisioningCount = hosts.filter((h) => h.status === "PROVISIONING").length;
@@ -85,17 +57,411 @@ export async function handleApiRoute(
 ): Promise<Response> {
   const url = new URL(req.url);
   const method = req.method.toUpperCase();
+  const isHtmx = req.headers.get("hx-request") === "true" || req.headers.get("HX-Request") === "true";
 
-  // POST /api/installed?mac=...
+  // =========================================================================
+  // 1. Full CRUD Host Endpoints (/api/hosts)
+  // =========================================================================
+
+  // GET /api/hosts
+  if (pathname === "/api/hosts" && method === "GET") {
+    const hosts = stateMgr.getAllHosts();
+    return new Response(JSON.stringify(hosts, null, 2), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // GET /api/hosts/:mac
+  if (pathname.startsWith("/api/hosts/") && method === "GET" && !pathname.endsWith("/edit")) {
+    const macParam = decodeURIComponent(pathname.slice("/api/hosts/".length)).trim();
+    const host = stateMgr.getHost(macParam) || stateMgr.getHostByIdentifier(macParam);
+    if (!host) {
+      return new Response(JSON.stringify({ error: `Host '${macParam}' not found.` }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify(host, null, 2), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // POST /api/hosts (Create Host)
+  if (pathname === "/api/hosts" && method === "POST") {
+    let bodyData: any = {};
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      try {
+        bodyData = await req.json();
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      formData.forEach((val, key) => {
+        bodyData[key] = val.toString();
+      });
+    }
+
+    const rawMac = bodyData.mac || url.searchParams.get("mac");
+    const rawHostname = bodyData.hostname || url.searchParams.get("hostname");
+
+    if (!rawMac || !rawHostname) {
+      return new Response(
+        JSON.stringify({ error: "Missing required parameters: 'mac' and 'hostname' are required." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const cleanMac = configMgr.normalizeMac(rawMac);
+    const existing = stateMgr.getHost(cleanMac, false);
+    if (existing) {
+      return new Response(
+        JSON.stringify({ error: `Host with MAC address '${cleanMac}' already exists.` }),
+        { status: 409, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const os = bodyData.os || "ubuntu";
+    const version = bodyData.version || (os === "ubuntu" ? "24.04" : os === "suse-micro" ? "6.2" : undefined);
+    const profile = bodyData.profile || "generic";
+    const note = bodyData.note || undefined;
+    const ip = bodyData.ip ? bodyData.ip.trim() : undefined;
+    const netmask = bodyData.netmask ? bodyData.netmask.trim() : undefined;
+    const gateway = bodyData.gateway ? bodyData.gateway.trim() : undefined;
+    const nameserversStr = bodyData.nameservers || bodyData.dns;
+    const nameservers = nameserversStr
+      ? nameserversStr.split(/[\s,]+/).map((s: string) => s.trim()).filter(Boolean)
+      : undefined;
+    const dhcp = bodyData.dhcp !== undefined ? (bodyData.dhcp === "true" || bodyData.dhcp === true || bodyData.dhcp === "on") : !ip;
+    const targetDisk = bodyData.target_disk || bodyData.disk || "/dev/sda";
+
+    // Custom properties (GitOps / K3s / RKE2)
+    const custom: Record<string, any> = {};
+    if (bodyData.k3s_version) custom.k3s_version = bodyData.k3s_version;
+    if (bodyData.rke2_version) custom.rke2_version = bodyData.rke2_version;
+    if (bodyData.boot_method) custom.boot_method = bodyData.boot_method;
+    if (bodyData.nfs_root) custom.nfs_root = bodyData.nfs_root;
+    if (bodyData.argocd === "true" || bodyData.argocd === true || bodyData.argocd === "on") {
+      custom.argocd = true;
+      if (bodyData.gitops_repo) custom.gitops_repo = bodyData.gitops_repo;
+      if (bodyData.gitops_branch) custom.gitops_branch = bodyData.gitops_branch;
+      if (bodyData.gitops_path) custom.gitops_path = bodyData.gitops_path;
+      if (bodyData.argocd_hostname) custom.argocd_hostname = bodyData.argocd_hostname;
+    }
+
+    const hostPayload: HostConfig = {
+      mac: cleanMac,
+      hostname: rawHostname.trim(),
+      os,
+      version,
+      profile,
+      note,
+      status: "PENDING",
+      network: {
+        dhcp,
+        ip: ip || undefined,
+        netmask: netmask || undefined,
+        gateway: gateway || undefined,
+        nameservers,
+      },
+      storage: {
+        target_disk: targetDisk,
+      },
+      custom,
+    };
+
+    const created = stateMgr.createHost(hostPayload);
+
+    if (isHtmx) {
+      const allData = buildDashboardData(configMgr, stateMgr);
+      const html = renderNodesTablePartial(allData.hosts, configMgr.appConfig.baseUrl);
+      return new Response(html, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "HX-Trigger": "hostCreated",
+        },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, message: `Host ${created.hostname} created successfully.`, host: created }, null, 2),
+      { status: 201, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // PUT /api/hosts/:mac or POST /api/hosts/:mac/edit (Update Host)
+  if (
+    (pathname.startsWith("/api/hosts/") && method === "PUT") ||
+    (pathname.startsWith("/api/hosts/") && pathname.endsWith("/edit") && method === "POST")
+  ) {
+    let macParam = "";
+    if (pathname.endsWith("/edit")) {
+      macParam = pathname.slice("/api/hosts/".length, -"/edit".length);
+    } else {
+      macParam = pathname.slice("/api/hosts/".length);
+    }
+    const cleanMac = configMgr.normalizeMac(decodeURIComponent(macParam));
+
+    let bodyData: any = {};
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      try {
+        bodyData = await req.json();
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      formData.forEach((val, key) => {
+        bodyData[key] = val.toString();
+      });
+    }
+
+    const existing = stateMgr.getHost(cleanMac, false);
+    if (!existing) {
+      return new Response(JSON.stringify({ error: `Host '${cleanMac}' not found.` }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const patch: Partial<HostConfig> = {};
+    if (bodyData.hostname) patch.hostname = bodyData.hostname.trim();
+    if (bodyData.os) patch.os = bodyData.os.trim();
+    if (bodyData.version !== undefined) patch.version = bodyData.version.trim() || undefined;
+    if (bodyData.profile !== undefined) patch.profile = bodyData.profile.trim() || undefined;
+    if (bodyData.note !== undefined) patch.note = bodyData.note;
+
+    // Network patch
+    const ip = bodyData.ip !== undefined ? bodyData.ip.trim() : existing.network?.ip;
+    const netmask = bodyData.netmask !== undefined ? bodyData.netmask.trim() : existing.network?.netmask;
+    const gateway = bodyData.gateway !== undefined ? bodyData.gateway.trim() : existing.network?.gateway;
+    let nameservers = existing.network?.nameservers;
+    if (bodyData.nameservers !== undefined) {
+      nameservers = bodyData.nameservers.split(/[\s,]+/).map((s: string) => s.trim()).filter(Boolean);
+    }
+    const dhcp = bodyData.dhcp !== undefined
+      ? (bodyData.dhcp === "true" || bodyData.dhcp === true || bodyData.dhcp === "on")
+      : existing.network?.dhcp;
+
+    patch.network = {
+      ...existing.network,
+      dhcp,
+      ip: ip || undefined,
+      netmask: netmask || undefined,
+      gateway: gateway || undefined,
+      nameservers,
+    };
+
+    if (bodyData.target_disk !== undefined) {
+      patch.storage = {
+        ...existing.storage,
+        target_disk: bodyData.target_disk.trim() || undefined,
+      };
+    }
+
+    // Custom patch
+    const custom = { ...(existing.custom || {}) };
+    if (bodyData.k3s_version !== undefined) custom.k3s_version = bodyData.k3s_version;
+    if (bodyData.rke2_version !== undefined) custom.rke2_version = bodyData.rke2_version;
+    if (bodyData.boot_method !== undefined) custom.boot_method = bodyData.boot_method;
+    if (bodyData.nfs_root !== undefined) custom.nfs_root = bodyData.nfs_root;
+    if (bodyData.argocd !== undefined) {
+      custom.argocd = bodyData.argocd === "true" || bodyData.argocd === true || bodyData.argocd === "on";
+    }
+    if (bodyData.gitops_repo !== undefined) custom.gitops_repo = bodyData.gitops_repo;
+    if (bodyData.gitops_branch !== undefined) custom.gitops_branch = bodyData.gitops_branch;
+    if (bodyData.gitops_path !== undefined) custom.gitops_path = bodyData.gitops_path;
+    if (bodyData.argocd_hostname !== undefined) custom.argocd_hostname = bodyData.argocd_hostname;
+    patch.custom = custom;
+
+    const updated = stateMgr.updateHost(cleanMac, patch);
+
+    if (isHtmx) {
+      const allData = buildDashboardData(configMgr, stateMgr);
+      const html = renderNodesTablePartial(allData.hosts, configMgr.appConfig.baseUrl);
+      return new Response(html, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "HX-Trigger": "hostUpdated",
+        },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, message: `Host ${cleanMac} updated.`, host: updated }, null, 2),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // DELETE /api/hosts/:mac or DELETE /api/nodes?mac=... (Delete Host)
+  if (
+    (pathname.startsWith("/api/hosts/") && method === "DELETE") ||
+    (pathname === "/api/nodes" && method === "DELETE")
+  ) {
+    let mac = "";
+    const isLegacyNodesEndpoint = pathname === "/api/nodes";
+    if (pathname.startsWith("/api/hosts/")) {
+      mac = decodeURIComponent(pathname.slice("/api/hosts/".length)).trim();
+    } else {
+      mac = url.searchParams.get("mac") || "";
+      if (!mac && req.headers.get("content-type")?.includes("application/json")) {
+        try {
+          const body = (await req.json()) as any;
+          mac = body?.mac || "";
+        } catch {}
+      }
+    }
+
+    if (!mac) {
+      return new Response(JSON.stringify({ error: "Missing required parameter: 'mac'" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const cleanMac = configMgr.normalizeMac(mac);
+
+    // Legacy /api/nodes behavior with HTMX:
+    // If it's a seed host from hosts.yaml, reset status to PENDING and return row partial
+    if (isLegacyNodesEndpoint && isHtmx) {
+      const isSeed = stateMgr.isSeedHost(cleanMac);
+      if (isSeed) {
+        stateMgr.resetHostStatus(cleanMac);
+        const existing = stateMgr.getHost(cleanMac);
+        if (existing) {
+          const item: DashboardHostItem = {
+            mac: cleanMac,
+            hostname: existing.hostname,
+            ip: existing.network?.ip,
+            os: existing.os,
+            version: existing.version,
+            profile: existing.profile || existing.role,
+            status: "PENDING",
+            note: existing.note,
+            rawConfig: existing,
+          };
+          const html = renderNodeRow(item, configMgr.appConfig.baseUrl);
+          return new Response(html, {
+            status: 200,
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          });
+        }
+      }
+      // Dynamic unconfigured node: delete from DB and return empty string so HTMX removes row
+      stateMgr.deleteHost(cleanMac);
+      return new Response("", {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+
+    const deleted = stateMgr.deleteHost(cleanMac);
+
+    if (isHtmx) {
+      // Return empty string so HTMX outerHTML swap removes the row completely
+      return new Response("", {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: deleted,
+        message: deleted
+          ? `Host ${cleanMac} permanently deleted from database.`
+          : `Host ${cleanMac} was not found.`,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // =========================================================================
+  // 2. Export Database to YAML (/api/export/yaml or /api/export/hosts.yaml)
+  // =========================================================================
+  if ((pathname === "/api/export/yaml" || pathname === "/api/export/hosts.yaml") && method === "GET") {
+    const yaml = stateMgr.exportToYaml();
+    return new Response(yaml, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/x-yaml; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="hosts.yaml"',
+      },
+    });
+  }
+
+  // =========================================================================
+  // 3. Status & Reset Endpoints
+  // =========================================================================
+
+  // POST /api/reset?mac=...
+  if (pathname === "/api/reset" && method === "POST") {
+    const mac = url.searchParams.get("mac");
+    if (!mac) {
+      return new Response(JSON.stringify({ error: "Missing parameter 'mac'" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const cleanMac = configMgr.normalizeMac(mac);
+    const reset = stateMgr.resetHostStatus(cleanMac);
+
+    if (isHtmx) {
+      const host = stateMgr.getHost(cleanMac);
+      if (host) {
+        const item: DashboardHostItem = {
+          mac: cleanMac,
+          hostname: host.hostname,
+          ip: host.network?.ip,
+          os: host.os,
+          version: host.version,
+          profile: host.profile || host.role,
+          status: "PENDING",
+          note: host.note,
+          rawConfig: host,
+        };
+        const html = renderNodeRow(item, configMgr.appConfig.baseUrl);
+        return new Response(html, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: reset,
+        message: reset
+          ? `Lock cleared for ${cleanMac}. Ready for reinstall.`
+          : `Host ${cleanMac} was not found.`,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // POST /api/installed?mac=... (Phone-home webhook)
   if (pathname === "/api/installed" && method === "POST") {
     let mac = url.searchParams.get("mac");
     let hostname = url.searchParams.get("hostname");
     let os = url.searchParams.get("os");
     let ip = url.searchParams.get("ip");
-
     let note = url.searchParams.get("note");
 
-    // Also attempt to read JSON body if query params are missing
     if (req.headers.get("content-type")?.includes("application/json")) {
       try {
         const body = (await req.json()) as any;
@@ -108,14 +474,14 @@ export async function handleApiRoute(
     }
 
     if (!mac) {
-      return new Response(JSON.stringify({ error: "Missing required query or body parameter: 'mac'" }), {
+      return new Response(JSON.stringify({ error: "Missing required parameter: 'mac'" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
 
     const cleanMac = configMgr.normalizeMac(mac);
-    const host = configMgr.getHost(cleanMac);
+    const host = stateMgr.getHost(cleanMac) || configMgr.getHost(cleanMac);
 
     const socketIp = server?.requestIP?.(req)?.address?.replace(/^::ffff:/, "");
     const forwardedIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
@@ -136,11 +502,17 @@ export async function handleApiRoute(
       note: note || host.note,
     });
 
+    const responseRecord = {
+      ...record,
+      client_ip: clientIp,
+      ip: clientIp,
+    };
+
     return new Response(
       JSON.stringify({
         success: true,
         message: `Host ${record.hostname} (${cleanMac}) recorded as installed.`,
-        record,
+        record: responseRecord,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
@@ -181,111 +553,26 @@ export async function handleApiRoute(
       );
     }
 
-    // Resolve target MAC address
-    const cleanMac = configMgr.normalizeMac(targetId);
-    let resolvedMac = cleanMac;
-    const installed = stateMgr.getAllInstalled();
-    const hostsConfig = configMgr.loadHostsConfig();
-
-    if (!installed[cleanMac]) {
-      // Try resolving by hostname
-      const lowerTarget = targetId.toLowerCase();
-      let foundMac: string | null = null;
-      for (const [rawMac, record] of Object.entries(installed)) {
-        if (record.hostname?.toLowerCase() === lowerTarget) {
-          foundMac = configMgr.normalizeMac(rawMac);
-          break;
-        }
-      }
-      if (!foundMac && hostsConfig.hosts) {
-        for (const rawMac of Object.keys(hostsConfig.hosts)) {
-          const host = configMgr.getHost(rawMac);
-          if (host.hostname?.toLowerCase() === lowerTarget) {
-            foundMac = configMgr.normalizeMac(rawMac);
-            break;
-          }
-        }
-      }
-      if (foundMac) {
-        resolvedMac = foundMac;
-      }
-    }
-
-    // Update note in StateManager. If node is not yet in state.json, create a record for it
-    let record = stateMgr.updateNote(resolvedMac, String(note));
-    if (!record) {
-      const host = configMgr.getHost(resolvedMac);
-      record = stateMgr.markInstalled(resolvedMac, {
-        hostname: host.hostname,
-        os: host.os,
-        clientIp: host.network?.ip || "unknown",
-        note: String(note),
-      });
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Note updated for host ${record.hostname || resolvedMac}.`,
-        record,
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  // POST /api/reset?mac=...
-  if (pathname === "/api/reset" && method === "POST") {
-    const mac = url.searchParams.get("mac");
-    if (!mac) {
-      return new Response(JSON.stringify({ error: "Missing parameter 'mac'" }), {
-        status: 400,
+    const host = stateMgr.getHostByIdentifier(targetId);
+    if (!host) {
+      return new Response(JSON.stringify({ error: `Node '${targetId}' not found.` }), {
+        status: 404,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    const cleanMac = configMgr.normalizeMac(mac);
-    const reset = stateMgr.resetInstalled(cleanMac);
-
-    // If request comes from HTMX, return the updated HTML row partial
-    if (req.headers.get("hx-request") === "true" || req.headers.get("HX-Request") === "true") {
-      const host = configMgr.getHost(cleanMac);
-      const record = stateMgr.getNodeRecord(cleanMac);
-      const updatedHost: DashboardHostItem = {
-        mac: cleanMac,
-        hostname: host.hostname,
-        ip: host.network?.ip || record?.ip,
-        os: host.os,
-        version: host.version,
-        profile: host.profile || host.role,
-        status: (record?.status || "PENDING") as any,
-        note: host.note || record?.note,
-        installed_at: record?.installed_at,
-        updated_at: record?.updated_at,
-        isK8s: Boolean(
-          host.profile?.includes("k3s") ||
-          host.profile?.includes("rke2") ||
-          host.profile?.includes("k8s")
-        ),
-      };
-      const html = renderNodeRow(updatedHost, configMgr.appConfig.baseUrl);
-      return new Response(html, {
-        status: 200,
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
-    }
-
+    const updated = stateMgr.updateNote(host.mac, String(note));
     return new Response(
       JSON.stringify({
-        success: reset,
-        message: reset
-          ? `Lock cleared for ${cleanMac}. Ready for reinstall.`
-          : `Host ${cleanMac} was not in installed state.`,
+        success: true,
+        message: `Note updated for host ${updated?.hostname || host.mac}.`,
+        record: updated,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   }
 
-  // GET /ui/nodes-table (HTMX partial update)
+  // GET /ui/nodes-table (HTMX polling update)
   if (pathname === "/ui/nodes-table" && method === "GET") {
     const data = buildDashboardData(configMgr, stateMgr);
     const html = renderNodesTablePartial(data.hosts, configMgr.appConfig.baseUrl);
@@ -295,7 +582,7 @@ export async function handleApiRoute(
     });
   }
 
-  // GET /api/nodes (Full SQLite node records)
+  // GET /api/nodes (Compatibility)
   if (pathname === "/api/nodes" && method === "GET") {
     return new Response(JSON.stringify(stateMgr.getAllNodes(), null, 2), {
       status: 200,
@@ -303,103 +590,7 @@ export async function handleApiRoute(
     });
   }
 
-  // DELETE /api/nodes?mac=... (Delete node record from SQLite)
-  if (pathname === "/api/nodes" && method === "DELETE") {
-    let mac = url.searchParams.get("mac");
-    if (!mac && req.headers.get("content-type")?.includes("application/json")) {
-      try {
-        const body = (await req.json()) as any;
-        mac = body?.mac;
-      } catch {}
-    }
-
-    if (!mac) {
-      return new Response(JSON.stringify({ error: "Missing required query parameter: 'mac'" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const cleanMac = configMgr.normalizeMac(mac);
-    const deleted = stateMgr.deleteNode(cleanMac);
-
-    if (req.headers.get("hx-request") === "true" || req.headers.get("HX-Request") === "true") {
-      const hostsConfig = configMgr.loadHostsConfig();
-      const isConfiguredHost = Boolean(hostsConfig.hosts && hostsConfig.hosts[cleanMac]);
-
-      if (isConfiguredHost) {
-        // Since node is declared in hosts.yaml, reset row back to clean PENDING state
-        const host = configMgr.getHost(cleanMac);
-        const pendingHost: DashboardHostItem = {
-          mac: cleanMac,
-          hostname: host.hostname,
-          ip: host.network?.ip,
-          os: host.os,
-          version: host.version,
-          profile: host.profile || host.role,
-          status: "PENDING",
-          note: host.note,
-          isK8s: Boolean(
-            host.profile?.includes("k3s") ||
-            host.profile?.includes("rke2") ||
-            host.profile?.includes("k8s")
-          ),
-        };
-        const html = renderNodeRow(pendingHost, configMgr.appConfig.baseUrl);
-        return new Response(html, {
-          status: 200,
-          headers: { "Content-Type": "text/html; charset=utf-8" },
-        });
-      } else {
-        // Dynamic node not declared in hosts.yaml: return empty string so HTMX deletes the row
-        return new Response("", {
-          status: 200,
-          headers: { "Content-Type": "text/html; charset=utf-8" },
-        });
-      }
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: deleted,
-        message: deleted
-          ? `Node ${cleanMac} deleted from state.`
-          : `Node ${cleanMac} was not found in state.`,
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  // GET /api/hosts
-  if (pathname === "/api/hosts" && method === "GET") {
-    const hostsConfig = configMgr.loadHostsConfig();
-    const installed = stateMgr.getAllInstalled();
-
-    const result: any[] = [];
-    if (hostsConfig.hosts) {
-      for (const [rawMac, spec] of Object.entries(hostsConfig.hosts)) {
-        const cleanMac = configMgr.normalizeMac(rawMac);
-        const resolved = configMgr.getHost(cleanMac);
-        result.push({
-          mac: cleanMac,
-          hostname: resolved.hostname,
-          os: resolved.os,
-          version: resolved.version,
-          profile: resolved.profile || resolved.role,
-          note: resolved.note,
-          installed: Boolean(installed[cleanMac]),
-          installed_info: installed[cleanMac] || null,
-        });
-      }
-    }
-
-    return new Response(JSON.stringify(result, null, 2), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  // GET /api/state
+  // GET /api/state (Compatibility)
   if (pathname === "/api/state" && method === "GET") {
     return new Response(JSON.stringify(stateMgr.getAllInstalled(), null, 2), {
       status: 200,
@@ -407,7 +598,9 @@ export async function handleApiRoute(
     });
   }
 
-  // GET /api/kubeconfig or /api/kubeconfig/:identifier
+  // =========================================================================
+  // 4. Kubeconfig SSH Fetcher (/api/kubeconfig or /api/kubeconfig/:identifier)
+  // =========================================================================
   if (
     (pathname === "/api/kubeconfig" || pathname.startsWith("/api/kubeconfig/")) &&
     method === "GET"
@@ -434,59 +627,16 @@ export async function handleApiRoute(
       );
     }
 
-    const hostsConfig = configMgr.loadHostsConfig();
-    const installed = stateMgr.getAllInstalled();
-
-    let targetMac: string | null = null;
-    let resolvedHost: any = null;
-
-    // 1. Try matching by MAC address
-    const normalizedInputMac = configMgr.normalizeMac(identifier);
-    if (hostsConfig.hosts && hostsConfig.hosts[normalizedInputMac]) {
-      targetMac = normalizedInputMac;
-      resolvedHost = configMgr.getHost(targetMac);
-    } else if (installed[normalizedInputMac]) {
-      targetMac = normalizedInputMac;
-      resolvedHost = configMgr.getHost(targetMac);
-    }
-
-    // 2. If not matched by MAC, search by hostname (case-insensitive)
-    if (!targetMac) {
-      const lowerId = identifier.toLowerCase();
-      if (hostsConfig.hosts) {
-        for (const rawMac of Object.keys(hostsConfig.hosts)) {
-          const cleanMac = configMgr.normalizeMac(rawMac);
-          const host = configMgr.getHost(cleanMac);
-          if (host.hostname?.toLowerCase() === lowerId) {
-            targetMac = cleanMac;
-            resolvedHost = host;
-            break;
-          }
-        }
-      }
-
-      if (!targetMac) {
-        for (const [rawMac, record] of Object.entries(installed)) {
-          const cleanMac = configMgr.normalizeMac(rawMac);
-          if (record.hostname?.toLowerCase() === lowerId) {
-            targetMac = cleanMac;
-            resolvedHost = configMgr.getHost(cleanMac);
-            break;
-          }
-        }
-      }
-    }
-
-    if (!targetMac || !resolvedHost) {
+    const resolvedHost = stateMgr.getHostByIdentifier(identifier);
+    if (!resolvedHost) {
       return new Response(
         JSON.stringify({
-          error: `Node '${identifier}' not found in registered hosts or installed state.`,
+          error: `Node '${identifier}' not found in registered hosts.`,
         }),
         { status: 404, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // 3. Verify that the profile runs a Kubernetes cluster
     const profile = (resolvedHost.profile || resolvedHost.role || "generic").toLowerCase();
     let remotePath = "";
 
@@ -503,10 +653,7 @@ export async function handleApiRoute(
       );
     }
 
-    // 4. Resolve node IP and SSH user
-    const installedInfo = installed[targetMac];
-    const nodeIp = installedInfo?.client_ip || resolvedHost.network?.ip;
-
+    const nodeIp = resolvedHost.network?.ip;
     if (!nodeIp || nodeIp === "unknown") {
       return new Response(
         JSON.stringify({
@@ -516,10 +663,9 @@ export async function handleApiRoute(
       );
     }
 
-    const sshUser = resolvedHost.user || hostsConfig.default?.user || "homelab";
+    const sshUser = resolvedHost.user || "homelab";
     const advertiseIp = url.searchParams.get("server_ip") || nodeIp;
 
-    // 5. Fetch kubeconfig via SSH directly without caching
     try {
       const proc = Bun.spawn(
         [
@@ -550,7 +696,6 @@ export async function handleApiRoute(
         );
       }
 
-      // Replace 127.0.0.1:6443 with target server IP
       const finalKubeconfig = stdout.replace(
         /https:\/\/127\.0\.0\.1:6443/g,
         `https://${advertiseIp}:6443`
@@ -564,7 +709,7 @@ export async function handleApiRoute(
               success: true,
               hostname: resolvedHost.hostname,
               ip: nodeIp,
-              mac: targetMac,
+              mac: resolvedHost.mac,
               profile,
               kubeconfig: finalKubeconfig,
             },

@@ -1,20 +1,28 @@
 import { Database } from "bun:sqlite";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import type { AppState, StateRecord, NodeRecord, NodeStatus } from "../types.ts";
+import { dirname, join, resolve } from "node:path";
+import YAML from "yaml";
+import type {
+  AppState,
+  StateRecord,
+  NodeRecord,
+  NodeStatus,
+  HostConfig,
+  HostEntity,
+  DefaultHostConfig,
+  HostsFileStructure,
+} from "../types.ts";
 
 export class StateManager {
   private dbPath: string;
-  private legacyJsonPath: string;
   private db: Database;
+  private yamlSeedPath: string;
 
   constructor(filePath: string = join(process.cwd(), "data", "state.db")) {
     if (filePath.endsWith(".json")) {
       this.dbPath = filePath.replace(/\.json$/, ".db");
-      this.legacyJsonPath = filePath;
     } else {
       this.dbPath = filePath;
-      this.legacyJsonPath = join(dirname(filePath), "state.json");
     }
 
     const dir = dirname(this.dbPath);
@@ -22,12 +30,13 @@ export class StateManager {
       mkdirSync(dir, { recursive: true });
     }
 
+    this.yamlSeedPath = resolve(process.env.CONFIG_PATH || "./config/hosts.yaml");
     this.db = new Database(this.dbPath);
     this.initDb();
   }
 
   public normalizeMac(mac: string): string {
-    return mac
+    return (mac || "")
       .trim()
       .toLowerCase()
       .replace(/[-]/g, ":")
@@ -37,212 +46,407 @@ export class StateManager {
   private initDb(): void {
     try {
       this.db.run("PRAGMA journal_mode = WAL;");
+      this.db.run("PRAGMA busy_timeout = 5000;");
+
+      // Global configuration table for defaults & settings
       this.db.run(`
-        CREATE TABLE IF NOT EXISTS nodes (
-          mac TEXT PRIMARY KEY,
-          hostname TEXT,
-          ip TEXT,
-          os TEXT,
-          status TEXT NOT NULL DEFAULT 'PENDING',
-          note TEXT,
-          installed_at TEXT,
+        CREATE TABLE IF NOT EXISTS global_config (
+          key TEXT PRIMARY KEY,
+          value_json TEXT NOT NULL,
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
       `);
-      this.db.run("CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);");
 
-      // Auto-migrate from state.json if nodes table is empty and legacy json exists
-      const countRow = this.db.prepare("SELECT count(*) as count FROM nodes").get() as { count: number };
-      if (countRow.count === 0 && existsSync(this.legacyJsonPath)) {
-        this.migrateFromJson();
+      // Comprehensive hosts table (Structured + JSON fields)
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS hosts (
+          mac TEXT PRIMARY KEY,
+          hostname TEXT NOT NULL,
+          os TEXT NOT NULL,
+          version TEXT,
+          profile TEXT,
+          role TEXT,
+          user TEXT,
+          password_hash TEXT,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          ip TEXT,
+          dhcp INTEGER DEFAULT 1,
+          netmask TEXT,
+          gateway TEXT,
+          nameservers_json TEXT,
+          interface TEXT,
+          target_disk TEXT,
+          storage_layout TEXT,
+          swap_size TEXT,
+          ssh_keys_json TEXT,
+          extra_packages_json TEXT,
+          force_install INTEGER DEFAULT 0,
+          note TEXT,
+          custom_json TEXT,
+          installed_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+      this.db.run("CREATE INDEX IF NOT EXISTS idx_hosts_status ON hosts(status);");
+      this.db.run("CREATE INDEX IF NOT EXISTS idx_hosts_hostname ON hosts(hostname);");
+
+      // Check if hosts table is empty; if so, seed from hosts.yaml
+      const countRow = this.db.prepare("SELECT count(*) as count FROM hosts").get() as { count: number };
+      if (countRow.count === 0) {
+        this.seedFromYaml();
       }
     } catch (err) {
       console.error(`[State] Error initializing database at ${this.dbPath}:`, err);
     }
   }
 
-  private migrateFromJson(): void {
+  public seedFromYaml(): void {
+    let targetYaml = this.yamlSeedPath;
+    if (!existsSync(targetYaml)) {
+      const example = resolve(dirname(targetYaml), "hosts.example.yaml");
+      const rootExample = resolve("./config/hosts.example.yaml");
+      targetYaml = existsSync(example) ? example : existsSync(rootExample) ? rootExample : "";
+    }
+
+    if (!targetYaml || !existsSync(targetYaml)) {
+      console.log(`[State] No YAML seed file found. Initializing with empty default config.`);
+      this.saveGlobalDefaultConfig({
+        os: "ubuntu",
+        version: "24.04",
+        profile: "generic",
+        user: "homelab",
+        storage: { layout: "direct", target_disk: "/dev/sda" },
+        network: { dhcp: true },
+      });
+      return;
+    }
+
     try {
-      const content = readFileSync(this.legacyJsonPath, "utf-8");
-      const json = JSON.parse(content);
-      if (json.installed && typeof json.installed === "object") {
-        const records = Object.entries<any>(json.installed);
-        if (records.length > 0) {
-          const insert = this.db.prepare(`
-            INSERT OR REPLACE INTO nodes (mac, hostname, ip, os, status, note, installed_at, updated_at)
-            VALUES ($mac, $hostname, $ip, $os, 'INSTALLED', $note, $installed_at, datetime('now'))
-          `);
-          this.db.transaction(() => {
-            for (const [mac, rec] of records) {
-              const cleanMac = this.normalizeMac(mac);
-              insert.run({
-                $mac: cleanMac,
-                $hostname: rec.hostname ?? null,
-                $ip: rec.client_ip ?? null,
-                $os: rec.os ?? null,
-                $note: rec.note ?? null,
-                $installed_at: rec.installed_at ?? new Date().toISOString(),
-              });
-            }
-          })();
-          console.log(`[State] Successfully migrated ${records.length} records from ${this.legacyJsonPath} to SQLite.`);
-        }
+      const raw = readFileSync(targetYaml, "utf-8");
+      const parsed = YAML.parse(raw) as HostsFileStructure;
+      if (!parsed) return;
+
+      if (parsed.default) {
+        this.saveGlobalDefaultConfig(parsed.default);
+      }
+
+      if (parsed.hosts && typeof parsed.hosts === "object") {
+        const entries = Object.entries(parsed.hosts);
+        console.log(`[State] Seeding ${entries.length} hosts from ${targetYaml} into SQLite...`);
+
+        // Check if legacy nodes table or legacy state.json had install records
+        const installedMacs = new Set<string>();
+        try {
+          const legacyNodes = this.db.prepare("SELECT mac FROM nodes WHERE status = 'INSTALLED'").all() as any[];
+          for (const row of legacyNodes) {
+            installedMacs.add(this.normalizeMac(row.mac));
+          }
+        } catch {}
+
+        this.db.transaction(() => {
+          for (const [rawMac, spec] of entries) {
+            const cleanMac = this.normalizeMac(rawMac);
+            const status: NodeStatus = installedMacs.has(cleanMac) ? "INSTALLED" : "PENDING";
+            this.createHostInternal({
+              mac: cleanMac,
+              hostname: spec.hostname || `homelab-${cleanMac.replace(/:/g, "").slice(-6)}`,
+              os: spec.os || parsed.default?.os || "ubuntu",
+              version: spec.version || parsed.default?.version,
+              profile: spec.profile || parsed.default?.profile,
+              role: spec.role || parsed.default?.role,
+              user: spec.user || parsed.default?.user,
+              password_hash: spec.password_hash || parsed.default?.password_hash,
+              ssh_authorized_keys: spec.ssh_authorized_keys || parsed.default?.ssh_authorized_keys,
+              storage: { ...parsed.default?.storage, ...spec.storage },
+              network: { ...parsed.default?.network, ...spec.network },
+              extra_packages: spec.extra_packages || parsed.default?.extra_packages,
+              force_install: spec.force_install ?? false,
+              note: spec.note || parsed.default?.note,
+              custom: { ...parsed.default?.custom, ...spec.custom },
+              status,
+              installed_at: status === "INSTALLED" ? new Date().toISOString() : undefined,
+            });
+          }
+        })();
+        console.log(`[State] Successfully seeded hosts into SQLite database.`);
       }
     } catch (err) {
-      console.error(`[State] Error migrating legacy JSON state:`, err);
+      console.error(`[State] Error seeding from YAML ${targetYaml}:`, err);
     }
   }
 
-  public isInstalled(mac: string): boolean {
+  public isSeedHost(mac: string): boolean {
     const cleanMac = this.normalizeMac(mac);
-    const row = this.db.prepare("SELECT status FROM nodes WHERE mac = ?").get(cleanMac) as { status: string } | undefined;
-    return row?.status === "INSTALLED";
+    try {
+      let targetYaml = this.yamlSeedPath;
+      if (!existsSync(targetYaml)) {
+        const example = resolve(dirname(targetYaml), "hosts.example.yaml");
+        const rootExample = resolve("./config/hosts.example.yaml");
+        targetYaml = existsSync(example) ? example : existsSync(rootExample) ? rootExample : "";
+      }
+      if (targetYaml && existsSync(targetYaml)) {
+        const raw = readFileSync(targetYaml, "utf-8");
+        const parsed = YAML.parse(raw) as HostsFileStructure;
+        if (parsed?.hosts) {
+          for (const k of Object.keys(parsed.hosts)) {
+            if (this.normalizeMac(k) === cleanMac) return true;
+          }
+        }
+      }
+    } catch {}
+    return false;
   }
 
-  public getStatus(mac: string): NodeStatus {
-    const cleanMac = this.normalizeMac(mac);
-    const row = this.db.prepare("SELECT status FROM nodes WHERE mac = ?").get(cleanMac) as { status: string } | undefined;
-    return (row?.status as NodeStatus) ?? "PENDING";
-  }
+  // --- Global Default Configuration ---
 
-  public markProvisioning(
-    mac: string,
-    info: { hostname?: string; os?: string; clientIp?: string; note?: string } = {}
-  ): NodeRecord {
-    const cleanMac = this.normalizeMac(mac);
-    const now = new Date().toISOString();
-    const existing = this.getNodeRecord(cleanMac);
+  public getGlobalDefaultConfig(): DefaultHostConfig {
+    try {
+      const row = this.db.prepare("SELECT value_json FROM global_config WHERE key = 'default_host_config'").get() as any;
+      if (row?.value_json) {
+        return JSON.parse(row.value_json);
+      }
+    } catch (err) {
+      console.error("[State] Error reading global default config:", err);
+    }
 
-    const hostname = info.hostname ?? existing?.hostname ?? null;
-    const ip = info.clientIp ?? existing?.ip ?? null;
-    const os = info.os ?? existing?.os ?? null;
-    const note = info.note ?? existing?.note ?? null;
-
-    // Only transition to PROVISIONING if not already INSTALLED
-    const status: NodeStatus = existing?.status === "INSTALLED" ? "INSTALLED" : "PROVISIONING";
-
-    this.db.prepare(`
-      INSERT INTO nodes (mac, hostname, ip, os, status, note, installed_at, updated_at)
-      VALUES ($mac, $hostname, $ip, $os, $status, $note, $installed_at, $updated_at)
-      ON CONFLICT(mac) DO UPDATE SET
-        hostname = coalesce(excluded.hostname, nodes.hostname),
-        ip = coalesce(excluded.ip, nodes.ip),
-        os = coalesce(excluded.os, nodes.os),
-        status = excluded.status,
-        note = coalesce(excluded.note, nodes.note),
-        updated_at = excluded.updated_at
-    `).run({
-      $mac: cleanMac,
-      $hostname: hostname,
-      $ip: ip,
-      $os: os,
-      $status: status,
-      $note: note,
-      $installed_at: existing?.installed_at ?? null,
-      $updated_at: now,
-    });
-
-    console.log(`[State] Marked MAC ${cleanMac} (${hostname || "unknown"}) as ${status}.`);
-    return this.getNodeRecord(cleanMac)!;
-  }
-
-  public markInstalled(
-    mac: string,
-    info: { hostname?: string; os?: string; clientIp?: string; note?: string } = {}
-  ): StateRecord {
-    const cleanMac = this.normalizeMac(mac);
-    const now = new Date().toISOString();
-    const existing = this.getNodeRecord(cleanMac);
-
-    const hostname = info.hostname ?? existing?.hostname ?? undefined;
-    const ip = info.clientIp ?? existing?.ip ?? undefined;
-    const os = info.os ?? existing?.os ?? undefined;
-    const note = info.note ?? existing?.note ?? undefined;
-
-    this.db.prepare(`
-      INSERT INTO nodes (mac, hostname, ip, os, status, note, installed_at, updated_at)
-      VALUES ($mac, $hostname, $ip, $os, 'INSTALLED', $note, $installed_at, $updated_at)
-      ON CONFLICT(mac) DO UPDATE SET
-        hostname = coalesce(excluded.hostname, nodes.hostname),
-        ip = coalesce(excluded.ip, nodes.ip),
-        os = coalesce(excluded.os, nodes.os),
-        status = 'INSTALLED',
-        note = coalesce(excluded.note, nodes.note),
-        installed_at = coalesce(nodes.installed_at, excluded.installed_at),
-        updated_at = excluded.updated_at
-    `).run({
-      $mac: cleanMac,
-      $hostname: hostname ?? null,
-      $ip: ip ?? null,
-      $os: os ?? null,
-      $note: note ?? null,
-      $installed_at: now,
-      $updated_at: now,
-    });
-
-    console.log(`[State] Marked MAC ${cleanMac} (${hostname || "unknown"}) as INSTALLED.`);
     return {
-      mac: cleanMac,
-      hostname,
-      os,
-      client_ip: ip,
-      note,
-      status: "INSTALLED",
-      installed_at: now,
+      os: "ubuntu",
+      version: "24.04",
+      profile: "generic",
+      user: "homelab",
+      storage: { layout: "direct", target_disk: "/dev/sda" },
+      network: { dhcp: true },
     };
   }
 
-  public updateNote(mac: string, note: string): StateRecord | null {
-    const cleanMac = this.normalizeMac(mac);
+  public saveGlobalDefaultConfig(config: DefaultHostConfig): void {
+    const json = JSON.stringify(config);
+    this.db.prepare(`
+      INSERT INTO global_config (key, value_json, updated_at)
+      VALUES ('default_host_config', $json, datetime('now'))
+      ON CONFLICT(key) DO UPDATE SET
+        value_json = excluded.value_json,
+        updated_at = datetime('now')
+    `).run({ $json: json });
+  }
+
+  // --- Host Entity Mapping ---
+
+  private rowToHost(row: any, applyDefaults: boolean = true): HostConfig {
+    let nameservers: string[] | undefined;
+    try { nameservers = row.nameservers_json ? JSON.parse(row.nameservers_json) : undefined; } catch {}
+
+    let ssh_keys: string[] | undefined;
+    try { ssh_keys = row.ssh_keys_json ? JSON.parse(row.ssh_keys_json) : undefined; } catch {}
+
+    let extra_packages: string[] | undefined;
+    try { extra_packages = row.extra_packages_json ? JSON.parse(row.extra_packages_json) : undefined; } catch {}
+
+    let custom: Record<string, any> | undefined;
+    try { custom = row.custom_json ? JSON.parse(row.custom_json) : undefined; } catch {}
+
+    const defaults = applyDefaults ? this.getGlobalDefaultConfig() : {};
+
+    const host: HostConfig = {
+      mac: row.mac,
+      hostname: row.hostname || `homelab-${row.mac.replace(/:/g, "").slice(-6)}`,
+      os: row.os || defaults.os || "ubuntu",
+      version: row.version || defaults.version,
+      profile: row.profile || defaults.profile || "generic",
+      role: row.role || defaults.role,
+      user: row.user || defaults.user || "homelab",
+      password_hash: row.password_hash || defaults.password_hash,
+      ssh_authorized_keys: [
+        ...(defaults.ssh_authorized_keys || []),
+        ...(ssh_keys || []),
+      ],
+      storage: {
+        ...defaults.storage,
+        target_disk: row.target_disk || defaults.storage?.target_disk,
+        layout: (row.storage_layout || defaults.storage?.layout || "direct") as any,
+        swap_size: row.swap_size || defaults.storage?.swap_size,
+      },
+      network: {
+        dhcp: row.dhcp !== null && row.dhcp !== undefined ? Boolean(row.dhcp) : (defaults.network?.dhcp ?? true),
+        ip: row.ip || defaults.network?.ip,
+        netmask: row.netmask || defaults.network?.netmask,
+        gateway: row.gateway || defaults.network?.gateway,
+        nameservers: nameservers || defaults.network?.nameservers,
+        interface: row.interface || defaults.network?.interface,
+      },
+      extra_packages: [
+        ...(defaults.extra_packages || []),
+        ...(extra_packages || []),
+      ],
+      force_install: Boolean(row.force_install),
+      note: row.note || defaults.note,
+      custom: {
+        ...(defaults.custom || {}),
+        ...(custom || {}),
+      },
+      status: (row.status as NodeStatus) || "PENDING",
+      installed_at: row.installed_at || undefined,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+
+    return host;
+  }
+
+  // --- CRUD Operations ---
+
+  private createHostInternal(host: HostConfig): HostConfig {
+    const cleanMac = this.normalizeMac(host.mac);
     const now = new Date().toISOString();
-    const existing = this.getNodeRecord(cleanMac);
 
-    if (existing) {
-      this.db.prepare(`
-        UPDATE nodes SET note = $note, updated_at = $updated_at WHERE mac = $mac
-      `).run({ $mac: cleanMac, $note: note, $updated_at: now });
+    const insertStmt = this.db.prepare(`
+      INSERT INTO hosts (
+        mac, hostname, os, version, profile, role, user, password_hash, status,
+        ip, dhcp, netmask, gateway, nameservers_json, interface,
+        target_disk, storage_layout, swap_size,
+        ssh_keys_json, extra_packages_json, force_install, note, custom_json,
+        installed_at, created_at, updated_at
+      ) VALUES (
+        $mac, $hostname, $os, $version, $profile, $role, $user, $password_hash, $status,
+        $ip, $dhcp, $netmask, $gateway, $nameservers_json, $interface,
+        $target_disk, $storage_layout, $swap_size,
+        $ssh_keys_json, $extra_packages_json, $force_install, $note, $custom_json,
+        $installed_at, $created_at, $updated_at
+      )
+      ON CONFLICT(mac) DO UPDATE SET
+        hostname = excluded.hostname,
+        os = excluded.os,
+        version = excluded.version,
+        profile = excluded.profile,
+        role = excluded.role,
+        user = excluded.user,
+        password_hash = coalesce(excluded.password_hash, hosts.password_hash),
+        status = excluded.status,
+        ip = excluded.ip,
+        dhcp = excluded.dhcp,
+        netmask = excluded.netmask,
+        gateway = excluded.gateway,
+        nameservers_json = excluded.nameservers_json,
+        interface = excluded.interface,
+        target_disk = excluded.target_disk,
+        storage_layout = excluded.storage_layout,
+        swap_size = excluded.swap_size,
+        ssh_keys_json = excluded.ssh_keys_json,
+        extra_packages_json = excluded.extra_packages_json,
+        force_install = excluded.force_install,
+        note = excluded.note,
+        custom_json = excluded.custom_json,
+        installed_at = coalesce(excluded.installed_at, hosts.installed_at),
+        updated_at = excluded.updated_at
+    `);
 
-      console.log(`[State] Updated note for MAC ${cleanMac}.`);
-      return {
-        mac: cleanMac,
-        hostname: existing.hostname,
-        os: existing.os,
-        client_ip: existing.ip,
-        note,
-        status: existing.status,
-        installed_at: existing.installed_at || now,
-      };
-    }
+    insertStmt.run({
+      $mac: cleanMac,
+      $hostname: host.hostname,
+      $os: host.os || "ubuntu",
+      $version: host.version || null,
+      $profile: host.profile || "generic",
+      $role: host.role || null,
+      $user: host.user || null,
+      $password_hash: host.password_hash || null,
+      $status: host.status || "PENDING",
+      $ip: host.network?.ip || null,
+      $dhcp: host.network?.dhcp !== false ? 1 : 0,
+      $netmask: host.network?.netmask || null,
+      $gateway: host.network?.gateway || null,
+      $nameservers_json: host.network?.nameservers ? JSON.stringify(host.network.nameservers) : null,
+      $interface: host.network?.interface || null,
+      $target_disk: host.storage?.target_disk || null,
+      $storage_layout: host.storage?.layout || null,
+      $swap_size: host.storage?.swap_size ? String(host.storage.swap_size) : null,
+      $ssh_keys_json: host.ssh_authorized_keys ? JSON.stringify(host.ssh_authorized_keys) : null,
+      $extra_packages_json: host.extra_packages ? JSON.stringify(host.extra_packages) : null,
+      $force_install: host.force_install ? 1 : 0,
+      $note: host.note || null,
+      $custom_json: host.custom ? JSON.stringify(host.custom) : null,
+      $installed_at: host.installed_at || null,
+      $created_at: host.created_at || now,
+      $updated_at: now,
+    });
+
+    return this.getHost(cleanMac)!;
+  }
+
+  public createHost(host: HostConfig): HostConfig {
+    const cleanMac = this.normalizeMac(host.mac);
+    if (!cleanMac) throw new Error("MAC address is required.");
+    if (!host.hostname) throw new Error("Hostname is required.");
+    return this.createHostInternal({ ...host, mac: cleanMac });
+  }
+
+  public getHost(mac: string, applyDefaults: boolean = true): HostConfig | null {
+    const cleanMac = this.normalizeMac(mac);
+    const row = this.db.prepare("SELECT * FROM hosts WHERE mac = ?").get(cleanMac);
+    if (!row) return null;
+    return this.rowToHost(row, applyDefaults);
+  }
+
+  public getHostByIdentifier(identifier: string): HostConfig | null {
+    const trimmed = (identifier || "").trim();
+    if (!trimmed) return null;
+
+    // 1. Check MAC match
+    const cleanMac = this.normalizeMac(trimmed);
+    let host = this.getHost(cleanMac);
+    if (host) return host;
+
+    // 2. Check Hostname match (case-insensitive)
+    const row = this.db.prepare("SELECT * FROM hosts WHERE lower(hostname) = ?").get(trimmed.toLowerCase());
+    if (row) return this.rowToHost(row);
+
     return null;
   }
 
-  public getRecord(mac: string): (StateRecord & NodeRecord) | undefined {
-    return this.getNodeRecord(mac);
+  public getAllHosts(applyDefaults: boolean = true): HostConfig[] {
+    const rows = this.db.prepare("SELECT * FROM hosts ORDER BY updated_at DESC").all();
+    return rows.map((r) => this.rowToHost(r, applyDefaults));
   }
 
-  public getNodeRecord(mac: string): (StateRecord & NodeRecord) | undefined {
+  public updateHost(mac: string, patch: Partial<HostConfig>): HostConfig | null {
     const cleanMac = this.normalizeMac(mac);
-    const row = this.db.prepare("SELECT * FROM nodes WHERE mac = ?").get(cleanMac) as any;
-    if (!row) return undefined;
-    return {
-      mac: row.mac,
-      hostname: row.hostname ?? undefined,
-      os: row.os ?? undefined,
-      client_ip: row.ip ?? undefined,
-      ip: row.ip ?? undefined,
-      status: row.status as NodeStatus,
-      note: row.note ?? undefined,
-      installed_at: row.installed_at ?? row.updated_at,
-      updated_at: row.updated_at,
+    const existing = this.getHost(cleanMac, false);
+    if (!existing) return null;
+
+    const updated: HostConfig = {
+      ...existing,
+      ...patch,
+      mac: cleanMac,
+      storage: {
+        ...existing.storage,
+        ...patch.storage,
+      },
+      network: {
+        ...existing.network,
+        ...patch.network,
+      },
+      custom: {
+        ...existing.custom,
+        ...patch.custom,
+      },
+      updated_at: new Date().toISOString(),
     };
+
+    return this.createHostInternal(updated);
   }
 
-  public resetInstalled(mac: string): boolean {
+  public deleteHost(mac: string): boolean {
     const cleanMac = this.normalizeMac(mac);
-    const existing = this.getNodeRecord(cleanMac);
-    if (existing && existing.status !== "PENDING") {
+    const res = this.db.prepare("DELETE FROM hosts WHERE mac = ?").run(cleanMac);
+    return res.changes > 0;
+  }
+
+  public resetHostStatus(mac: string): boolean {
+    const cleanMac = this.normalizeMac(mac);
+    const host = this.getHost(cleanMac, false);
+    if (host) {
       this.db.prepare(`
-        UPDATE nodes SET status = 'PENDING', updated_at = datetime('now') WHERE mac = ?
+        UPDATE hosts SET status = 'PENDING', updated_at = datetime('now') WHERE mac = ?
       `).run(cleanMac);
       console.log(`[State] Reset install state for MAC ${cleanMac}. Status changed to PENDING.`);
       return true;
@@ -250,40 +454,192 @@ export class StateManager {
     return false;
   }
 
-  public deleteNode(mac: string): boolean {
+  // --- Runtime Provisioning & Install Lifecycle ---
+
+  public isInstalled(mac: string): boolean {
     const cleanMac = this.normalizeMac(mac);
-    const res = this.db.prepare("DELETE FROM nodes WHERE mac = ?").run(cleanMac);
-    return res.changes > 0;
+    const host = this.getHost(cleanMac);
+    return host?.status === "INSTALLED";
+  }
+
+  public getStatus(mac: string): NodeStatus {
+    const cleanMac = this.normalizeMac(mac);
+    const host = this.getHost(cleanMac);
+    return host?.status ?? "PENDING";
+  }
+
+  public markProvisioning(
+    mac: string,
+    info: { hostname?: string; os?: string; clientIp?: string; note?: string } = {}
+  ): HostConfig {
+    const cleanMac = this.normalizeMac(mac);
+    let existing = this.getHost(cleanMac, false);
+
+    if (!existing) {
+      // Create registered host with defaults
+      const defaults = this.getGlobalDefaultConfig();
+      existing = {
+        mac: cleanMac,
+        hostname: info.hostname || `homelab-${cleanMac.replace(/:/g, "").slice(-6)}`,
+        os: info.os || defaults.os || "ubuntu",
+        status: "PROVISIONING",
+        network: { dhcp: true, ip: info.clientIp },
+        note: info.note,
+      };
+      return this.createHostInternal(existing);
+    }
+
+    const nextStatus: NodeStatus = existing.status === "INSTALLED" ? "INSTALLED" : "PROVISIONING";
+    return this.updateHost(cleanMac, {
+      hostname: info.hostname || existing.hostname,
+      os: info.os || existing.os,
+      status: nextStatus,
+      network: {
+        ...existing.network,
+        ip: info.clientIp || existing.network?.ip,
+      },
+      note: info.note ?? existing.note,
+    })!;
+  }
+
+  public markInstalled(
+    mac: string,
+    info: { hostname?: string; os?: string; clientIp?: string; note?: string } = {}
+  ): HostConfig {
+    const cleanMac = this.normalizeMac(mac);
+    const now = new Date().toISOString();
+    let existing = this.getHost(cleanMac, false);
+
+    if (!existing) {
+      const defaults = this.getGlobalDefaultConfig();
+      existing = {
+        mac: cleanMac,
+        hostname: info.hostname || `homelab-${cleanMac.replace(/:/g, "").slice(-6)}`,
+        os: info.os || defaults.os || "ubuntu",
+        status: "INSTALLED",
+        installed_at: now,
+        network: { dhcp: true, ip: info.clientIp },
+        note: info.note,
+      };
+      return this.createHostInternal(existing);
+    }
+
+    return this.updateHost(cleanMac, {
+      hostname: info.hostname || existing.hostname,
+      os: info.os || existing.os,
+      status: "INSTALLED",
+      installed_at: now,
+      network: {
+        ...existing.network,
+        ip: info.clientIp || existing.network?.ip,
+      },
+      note: info.note ?? existing.note,
+    })!;
+  }
+
+  public updateNote(mac: string, note: string): HostConfig | null {
+    return this.updateHost(mac, { note });
+  }
+
+  // --- YAML Export & Import ---
+
+  public exportToYaml(): string {
+    const defaults = this.getGlobalDefaultConfig();
+    const allHosts = this.getAllHosts(false);
+
+    const hostsObj: Record<string, any> = {};
+    for (const h of allHosts) {
+      const item: any = {
+        hostname: h.hostname,
+        os: h.os,
+      };
+      if (h.version) item.version = h.version;
+      if (h.profile) item.profile = h.profile;
+      if (h.role) item.role = h.role;
+      if (h.note) item.note = h.note;
+      if (h.custom && Object.keys(h.custom).length > 0) item.custom = h.custom;
+      if (h.network) {
+        item.network = {};
+        if (h.network.dhcp !== undefined) item.network.dhcp = h.network.dhcp;
+        if (h.network.ip) item.network.ip = h.network.ip;
+        if (h.network.netmask) item.network.netmask = h.network.netmask;
+        if (h.network.gateway) item.network.gateway = h.network.gateway;
+        if (h.network.nameservers) item.network.nameservers = h.network.nameservers;
+      }
+      if (h.storage && (h.storage.target_disk || h.storage.layout)) {
+        item.storage = {};
+        if (h.storage.target_disk) item.storage.target_disk = h.storage.target_disk;
+        if (h.storage.layout) item.storage.layout = h.storage.layout;
+      }
+      if (h.force_install) item.force_install = true;
+      hostsObj[h.mac] = item;
+    }
+
+    const doc = {
+      default: defaults,
+      hosts: hostsObj,
+    };
+
+    return YAML.stringify(doc);
+  }
+
+  // --- Backwards Compatibility Helpers ---
+
+  public getNodeRecord(mac: string): (StateRecord & NodeRecord) | undefined {
+    const host = this.getHost(mac);
+    if (!host) return undefined;
+    return {
+      mac: host.mac,
+      hostname: host.hostname,
+      os: host.os,
+      client_ip: host.network?.ip,
+      ip: host.network?.ip,
+      status: host.status || "PENDING",
+      note: host.note,
+      installed_at: host.installed_at,
+      updated_at: host.updated_at || new Date().toISOString(),
+    };
+  }
+
+  public getRecord(mac: string): (StateRecord & NodeRecord) | undefined {
+    return this.getNodeRecord(mac);
+  }
+
+  public resetInstalled(mac: string): boolean {
+    return this.resetHostStatus(mac);
+  }
+
+  public deleteNode(mac: string): boolean {
+    return this.deleteHost(mac);
   }
 
   public getAllInstalled(): Record<string, StateRecord> {
-    const rows = this.db.prepare("SELECT * FROM nodes WHERE status = 'INSTALLED'").all() as any[];
+    const installedHosts = this.getAllHosts().filter((h) => h.status === "INSTALLED");
     const result: Record<string, StateRecord> = {};
-    for (const row of rows) {
-      result[row.mac] = {
-        mac: row.mac,
-        hostname: row.hostname ?? undefined,
-        os: row.os ?? undefined,
-        client_ip: row.ip ?? undefined,
-        note: row.note ?? undefined,
-        status: row.status as NodeStatus,
-        installed_at: row.installed_at ?? row.updated_at,
+    for (const h of installedHosts) {
+      result[h.mac] = {
+        mac: h.mac,
+        hostname: h.hostname,
+        os: h.os,
+        client_ip: h.network?.ip,
+        note: h.note,
+        status: h.status,
+        installed_at: h.installed_at || h.updated_at || new Date().toISOString(),
       };
     }
     return result;
   }
 
   public getAllNodes(): NodeRecord[] {
-    const rows = this.db.prepare("SELECT * FROM nodes ORDER BY updated_at DESC").all() as any[];
-    return rows.map((row) => ({
-      mac: row.mac,
-      hostname: row.hostname ?? undefined,
-      ip: row.ip ?? undefined,
-      os: row.os ?? undefined,
-      status: row.status as NodeStatus,
-      note: row.note ?? undefined,
-      installed_at: row.installed_at ?? undefined,
-      updated_at: row.updated_at,
+    return this.getAllHosts().map((h) => ({
+      mac: h.mac,
+      hostname: h.hostname,
+      ip: h.network?.ip,
+      os: h.os,
+      status: h.status || "PENDING",
+      note: h.note,
+      installed_at: h.installed_at,
+      updated_at: h.updated_at || new Date().toISOString(),
     }));
   }
 
