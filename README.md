@@ -55,14 +55,24 @@ Hệ thống máy chủ HTTP iPXE siêu tốc, gọn nhẹ và linh hoạt đư�
 
 ---
 
-## 2. Các Profile Cài Đặt Sẵn Cho Ubuntu Server
+## 2. Các Profile Cài Đặt & Mô Hình Registry Map
 
-Trong `src/providers/ubuntu/profiles/index.ts`, hệ thống định nghĩa sẵn các profile chuyên dụng:
+Hệ thống quản lý profile cài đặt theo mô hình **Profile Registry Map** (`Record<string, ProfileHandler>`). Mỗi profile được tách thành một file riêng biệt độc lập trong thư mục `src/providers/<os>/profiles/`, cho phép dễ dàng mở rộng và bảo trì theo nguyên lý Open-Closed:
+
+### 2.1. Ubuntu Server 24.04 LTS (`src/providers/ubuntu/profiles/`)
 
 | Profile | Gói cài đặt sẵn | Tinh chỉnh hệ thống tự động |
 | :--- | :--- | :--- |
 | **`k3s-single-node`** *(Mặc định cho K3s)* | `curl`, `qemu-guest-agent`, `htop`, `iotop`, `net-tools`, `open-iscsi`, `nfs-common`, `ca-certificates` | - Tắt swap trong `/etc/fstab`<br>- Cấu hình sysctl: `net.bridge.bridge-nf-call-iptables=1`, `net.ipv4.ip_forward=1`<br>- Nạp kernel module `overlay`, `br_netfilter`<br>- Tạo file cấu hình `/etc/rancher/k3s/config.yaml` với `write-kubeconfig-mode: "0644"` và dynamic `tls-san` (IP & hostname)<br>- Cài K3s server bản stable (hoặc `custom.k3s_version`), tự động enable systemd service<br>- Cấu hình `~/.kube/config` symlink và `KUBECONFIG` toàn hệ thống |
-| **`generic`** | `qemu-guest-agent`, `curl`, `htop`, `vim`, `tmux`, `net-tools`, `git` | Cấu hình máy chủ cơ bản kèm SSH key |
+| **`generic`** | `qemu-guest-agent`, `curl`, `htop`, `vim`, `tmux`, `net-tools`, `git` | Cấu hình máy chủ cơ bản kèm SSH key & tự động nối base late commands |
+
+### 2.2. openSUSE Leap Micro 6.2 (`src/providers/suse-micro/profiles/`)
+
+| Profile | Gói cài đặt sẵn | Tinh chỉnh hệ thống tự động |
+| :--- | :--- | :--- |
+| **`rke2-single-node`** *(Cụm RKE2)* | `curl`, `ca-certificates`, `tar`, `gzip`, `qemu-guest-agent`, `nfs-client`, `open-iscsi` | - Cài Rancher RKE2 qua RPM method chính thức<br>- Cấu hình SELinux permissive & tắt swap/firewalld<br>- Tinh chỉnh sysctl mạng K8s và nạp modules `overlay`, `br_netfilter`<br>- Tạo file `/etc/rancher/rke2/config.yaml` hỗ trợ CNI (`canal`/`cilium`), Ingress, token, dynamic TLS SAN<br>- Kích hoạt systemd `rke2-server.service` và tạo symlink `~/.kube/config` |
+| **`generic`** | `curl`, `qemu-guest-agent`, `git` | Cấu hình hệ thống cơ bản và tự động mở rộng Btrfs filesystem (`btrfs filesystem resize max /`) |
+
 
 ---
 

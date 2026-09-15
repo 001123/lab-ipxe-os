@@ -116,7 +116,7 @@ File cấu hình do Bun server sinh động tại [src/providers/ubuntu/autoinst
 
 ### 1.5. Mổ Xẻ Chuyên Sâu Profile `k3s-single-node`
 
-Profile `k3s-single-node` định nghĩa tại [src/providers/ubuntu/profiles/index.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/ubuntu/profiles/index.ts) biến một máy Ubuntu trắng thành một cụm Kubernetes Single Node Production-ready:
+Profile `k3s-single-node` được module hóa độc lập tại [src/providers/ubuntu/profiles/k3s-single-node.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/ubuntu/profiles/k3s-single-node.ts), biến một máy Ubuntu trắng thành một cụm Kubernetes Single Node Production-ready:
 
 ```typescript
 lateCommands: [
@@ -171,6 +171,8 @@ EOF'`,
 
 > [!IMPORTANT]
 > Lưu ý kỹ thuật: Tham số `INSTALL_K3S_SKIP_START=true` là bắt buộc vì tại thời điểm `late-commands` thực thi, hệ điều hành đích vẫn đang nằm trong môi trường chroot (`/target`), systemd PID 1 thực sự của máy chưa chạy, nếu cố khởi động service K3s tại đây sẽ dẫn đến lỗi cài đặt Subiquity bị fail! Do đó lệnh `systemctl enable k3s` được gọi để kích hoạt service cho lần boot đầu tiên.
+>
+> Ngoài ra, các lệnh cơ sở hạ tầng dùng chung (như kích hoạt `qemu-guest-agent`, đồng bộ `efibootmgr`, và gọi Webhook `/api/installed`) được gom tập trung vào [`src/providers/ubuntu/profiles/base.ts`](file:///Users/timi/lab/lab-ipxe-os/src/providers/ubuntu/profiles/base.ts) và tự động nối vào cuối danh sách `lateCommands` ở tầng Dispatcher.
 
 ---
 
@@ -205,12 +207,117 @@ openSUSE Leap Micro sử dụng công cụ cấu hình ban đầu mang tên **Co
 - Kịch bản Combustion tự động:
   - Thiết lập mật khẩu root và hostname.
   - Ghi SSH public keys vào `/root/.ssh/authorized_keys`.
-  - Thiết lập network tĩnh hoặc DHCP.
-  - Kích hoạt transactional-update cho phép cập nhật hệ điều hành bất biến an toàn.
+  - Thiết lập network tĩnh hoặc DHCP (qua NetworkManager connection).
+  - Tự động mở rộng Btrfs root filesystem (`btrfs filesystem resize max /`).
+  - Phục hồi thứ tự khởi động UEFI (`efibootmgr`) và gửi Webhook Phone-Home `/api/installed`.
+
+Hệ thống hỗ trợ 2 profile cho openSUSE Leap Micro qua thư mục [`src/providers/suse-micro/profiles/`](file:///Users/timi/lab/lab-ipxe-os/src/providers/suse-micro/profiles/):
+- **`generic`** ([generic.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/suse-micro/profiles/generic.ts)): Cài các gói cơ bản (`curl`, `git`, `qemu-guest-agent`) và mở rộng Btrfs root filesystem.
+- **`rke2-single-node`** ([rke2-single-node.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/suse-micro/profiles/rke2-single-node.ts)): Tự động cài đặt **Rancher RKE2** bằng RPM method chính thức, cấu hình SELinux permissive, tắt swap & firewalld, bật sysctl/modules Kubernetes, cấu hình CNI (Canal / Cilium), Ingress (Traefik / NGINX), và tạo symlink kubeconfig.
 
 ---
 
-## 4. Hướng Dẫn Mở Rộng: Tự Thêm OS Provider Mới
+## 4. Mô Hình Kiến Trúc 2 Tầng Registry: Provider Registry & Profile Registry Map
+
+Hệ thống được thiết kế theo nguyên lý **Separation of Concerns** và **Open-Closed Principle (OCP)** thông qua mô hình Registry 2 tầng:
+
+```mermaid
+flowchart TD
+    subgraph Tier1 ["Tầng 1: OS Provider Registry (src/providers/registry.ts)"]
+        PR["ProviderRegistry"]
+        PR -->|"os: 'ubuntu'"| UP["UbuntuProvider"]
+        PR -->|"os: 'talos'"| TP["TalosProvider"]
+        PR -->|"os: 'suse-micro'"| SP["SuseMicroProvider"]
+    end
+
+    subgraph Tier2 ["Tầng 2: Workload Profile Registry Map (src/providers/<os>/profiles/)"]
+        UP -->|"getUbuntuProfile(profileName)"| U_MAP["Ubuntu PROFILES Map"]
+        U_MAP -->|"generic"| UG["getGenericProfile"]
+        U_MAP -->|"k3s-single-node"| UK["getK3sSingleNodeProfile"]
+        
+        SP -->|"getSuseMicroProfile(profileName)"| S_MAP["SUSE PROFILES Map"]
+        S_MAP -->|"generic"| SG["getGenericProfile"]
+        S_MAP -->|"rke2-single-node"| SR["getRke2SingleNodeProfile"]
+    end
+```
+
+### 4.1. Tại sao sử dụng Registry Map thay vì Switch-Case?
+
+| Tiêu Chí | Switch-Case Trước Đây | Registry Map Hiện Tại |
+| :--- | :--- | :--- |
+| **Nguyên lý Open-Closed (OCP)** | Vi phạm: Mỗi lần thêm profile đều phải can thiệp trực tiếp vào thân hàm dispatcher. | Tuân thủ triệt để: Hàm dispatcher là pure function, chỉ cần thêm 1 dòng đăng ký vào Map. |
+| **Boilerplate Code** | Nhiều khối lệnh `case "..." : return ...; break;` lặp đi lặp lại. | Khai báo dạng dữ liệu thuần túy (Declarative Data): `Record<string, ProfileHandler>`. |
+| **Khả năng Nội suy (Introspection)** | Không thể liệt kê danh sách profile nếu không hardcode. | Dễ dàng lấy `Object.keys(PROFILES)` phục vụ API listing hoặc validate cấu hình `hosts.yaml`. |
+| **Độ tin cậy & Fallback** | Dễ sót nhánh default hoặc xử lý hoa/thường không đồng nhất. | Luôn chuẩn hóa `.toLowerCase()` và fallback có cảnh báo `console.warn` về profile `generic`. |
+| **Độ nhất quán (Consistency)** | Mỗi OS một kiểu viết (Ubuntu kiểu khác, SUSE kiểu khác). | Toàn bộ các Provider đều đồng bộ theo cùng 1 chuẩn cấu trúc module. |
+
+### 4.2. Cấu Trúc Module Chuẩn Của Một Thư Mục Profile
+
+Cả `src/providers/ubuntu/profiles/` và `src/providers/suse-micro/profiles/` đều tuân theo cấu trúc 4 thành phần:
+
+```
+src/providers/<os>/profiles/
+├── types.ts              # Interface ProfileSpec và Type ProfileHandler
+├── base.ts               # (Tùy chọn) Các late-commands/snippets nền tảng dùng chung
+├── generic.ts            # Profile cơ sở mặc định (Standard base utilities)
+├── <custom-profile>.ts   # Profile chuyên biệt (k3s-single-node, rke2-single-node, ...)
+└── index.ts              # Pure Dispatcher sử dụng Registry Map
+```
+
+#### Ví dụ mã nguồn triển khai Registry Map (`src/providers/suse-micro/profiles/index.ts`):
+```typescript
+import type { HostConfig } from "../../../types.ts";
+import type { SuseProfileSpec, SuseProfileHandler } from "./types.ts";
+import { getGenericProfile } from "./generic.ts";
+import { getRke2SingleNodeProfile } from "./rke2-single-node.ts";
+
+export * from "./types.ts";
+
+// Registry Map khai báo tập trung các profile
+const PROFILES: Record<string, SuseProfileHandler> = {
+  generic: getGenericProfile,
+  "rke2-single-node": getRke2SingleNodeProfile,
+};
+
+// Pure Dispatcher Function
+export function getSuseMicroProfile(
+  profileName: string,
+  host: HostConfig,
+  baseUrl: string
+): SuseProfileSpec {
+  const normalizedKey = profileName.toLowerCase();
+  let handler = PROFILES[normalizedKey];
+
+  if (!handler) {
+    console.warn(
+      `[openSUSE Leap Micro Profile] Unknown profile "${profileName}", falling back to "generic".`
+    );
+    handler = getGenericProfile;
+  }
+
+  return handler(host, baseUrl);
+}
+```
+
+### 4.3. Quy trình 3 bước thêm một Profile mới
+
+Khi bạn muốn thêm một profile mới (ví dụ: `k3s-worker` cho Ubuntu hoặc `microos-desktop` cho SUSE):
+
+1. **Tạo file profile độc lập:** Tạo `src/providers/<os>/profiles/<tên-profile>.ts` và xuất hàm `get...Profile(host: HostConfig, baseUrl: string): ProfileSpec`.
+2. **Đăng ký vào Registry Map:** Mở `src/providers/<os>/profiles/index.ts`, import hàm vừa tạo và thêm 1 dòng vào đối tượng `PROFILES`:
+   ```typescript
+   const PROFILES: Record<string, ProfileHandler> = {
+     generic: getGenericProfile,
+     "k3s-single-node": getK3sSingleNodeProfile,
+     "k3s-worker": getK3sWorkerProfile, // <-- Thêm tại đây
+   };
+   ```
+3. **Sử dụng trong `config/hosts.yaml`:** Khai báo `profile: k3s-worker` cho máy đích. Hệ thống sẽ tự động điều hướng mà không cần sửa bất kỳ dòng code routing nào khác!
+
+---
+
+## 5. Hướng Dẫn Mở Rộng: Tự Thêm OS Provider Mới
+
 
 Kiến trúc của dự án được thiết kế theo mẫu **Strategy / Registry Pattern**, cho phép bạn dễ dàng tích hợp thêm các bản phân phối Linux khác (ví dụ: Debian, Alpine Linux, Fedora CoreOS, Arch Linux).
 

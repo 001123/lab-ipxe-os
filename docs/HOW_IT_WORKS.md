@@ -167,9 +167,11 @@ Hệ thống tuân thủ triệt để nguyên lý **Infrastructure as Code (IaC
 - ⚙️ [**Động Cơ Cài Đặt Hệ Điều Hành** (`os-engines.md`)](os-engines.md):
   * Phân tích Casper, Subiquity Autoinstall và Cloud-Init.
   * So sánh chi tiết kỹ thuật Rootfs: HTTP Range 206 Partial Content vs. NFS Stream Boot.
-  * Mổ xẻ Profile `k3s-single-node` trong late-commands.
+  * Mổ xẻ Profile `k3s-single-node` (Ubuntu) và `rke2-single-node` (openSUSE Leap Micro).
   * Giới thiệu Talos Linux MachineConfig và openSUSE Combustion.
-  * Hướng dẫn từng bước tự viết thêm OS Provider mới.
+  * Mô hình kiến trúc 2 tầng Registry: Provider Registry & Profile Registry Map.
+  * Hướng dẫn từng bước tự thêm Profile và OS Provider mới.
+
 - 🛡️ [**Cơ Chế Chống Boot Loop & Máy Trạng Thái** (`anti-boot-loop.md`)](anti-boot-loop.md):
   * Giải quyết nghịch lý vòng lặp cài đặt vô tận trong Zero-Touch Provisioning.
   * Kỹ thuật chuyển giao phần cứng `sanboot --drive 0x80 || exit 1`.
