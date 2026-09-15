@@ -32,48 +32,73 @@ export function getRke2SingleNodeProfile(host: HostConfig, _baseUrl: string): Su
   const gitopsToken: string = host.custom?.gitops_token || "";
   const gitopsSshKey: string = host.custom?.gitops_ssh_key || "";
 
-  let additionalAppsYaml = "";
+  let gitopsManifestSnippet = "";
   if (gitopsRepo) {
-    additionalAppsYaml = `
-      additionalApplications:
-        - name: root-bootstrap
-          namespace: argocd
-          project: default
-          source:
-            repoURL: "${gitopsRepo}"
-            targetRevision: "${gitopsBranch}"
-            path: "${gitopsPath}"
-          destination:
-            server: "https://kubernetes.default.svc"
-            namespace: argocd
-          syncPolicy:
-            automated:
-              prune: true
-              selfHeal: true`;
-  }
-
-  let repoCredsYaml = "";
-  if (gitopsRepo && (gitopsToken || gitopsSshKey)) {
+    let repoSecretYaml = "";
     if (gitopsToken) {
-      repoCredsYaml = `
-      repositories:
-        root-repo:
-          url: "${gitopsRepo}"
-          username: "git"
-          password: "${gitopsToken}"`;
+      repoSecretYaml = `
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gitops-repo-creds
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: git
+  url: "${gitopsRepo}"
+  username: "git"
+  password: "${gitopsToken}"`;
     } else if (gitopsSshKey) {
       const indentedKey = gitopsSshKey
         .trim()
         .split("\n")
-        .map((l: string) => `            ${l}`)
+        .map((l: string) => `    ${l}`)
         .join("\n");
-      repoCredsYaml = `
-      repositories:
-        root-repo:
-          url: "${gitopsRepo}"
-          sshPrivateKey: |
+      repoSecretYaml = `
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gitops-repo-creds
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: git
+  url: "${gitopsRepo}"
+  sshPrivateKey: |
 ${indentedKey}`;
     }
+
+    gitopsManifestSnippet = `cat <<'EOF' > /var/lib/rancher/rke2/server/manifests/argocd-root-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-bootstrap
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: "${gitopsRepo}"
+    targetRevision: "${gitopsBranch}"
+    path: "${gitopsPath}"
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+${repoSecretYaml}
+EOF`;
   }
 
   const argocdSnippets = enableArgocd
@@ -97,7 +122,7 @@ ${versionEntry}  valuesContent: |-
       domain: ${argocdDomain}
     configs:
       params:
-        server.insecure: true${repoCredsYaml}
+        server.insecure: true
     server:
       ingress:
         enabled: true
@@ -105,7 +130,7 @@ ${versionEntry}  valuesContent: |-
         hostname: ${argocdDomain}
         paths:
           - /
-        pathType: Prefix${additionalAppsYaml}
+        pathType: Prefix
     controller:
       replicas: 1
     repoServer:
@@ -123,7 +148,7 @@ EOF
 # Fallback: if dynamic DHCP node IP detected, update nip.io domain if using hostname placeholder
 if [ -n "\${NODE_IP:-}" ] && grep -q "argocd.${host.hostname}.nip.io" /var/lib/rancher/rke2/server/manifests/argocd.yaml; then
   sed -i "s|argocd.${host.hostname}.nip.io|argocd.\${NODE_IP}.nip.io|g" /var/lib/rancher/rke2/server/manifests/argocd.yaml
-fi`,
+fi${gitopsManifestSnippet ? `\n\n${gitopsManifestSnippet}` : ""}`,
 
         `# 13. Install helper script to retrieve ArgoCD admin password and URL
 mkdir -p /usr/local/bin

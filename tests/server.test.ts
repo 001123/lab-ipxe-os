@@ -471,7 +471,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       const profile = getSuseMicroProfile("rke2-single-node", gitopsHost, baseUrl);
       const script = profile.scriptSnippets.join("\n");
       expect(script).toContain("domain: argocd.lab.internal");
-      expect(script).toContain("additionalApplications:");
+      expect(script).toContain("argocd-root-app.yaml");
       expect(script).toContain("name: root-bootstrap");
       expect(script).toContain("repoURL: \"https://github.com/my-user/homelab-gitops.git\"");
       expect(script).toContain("targetRevision: \"main\"");
