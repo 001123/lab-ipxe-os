@@ -80,8 +80,12 @@ mkdir -pm700 /root/.ssh
 ${sshKeysFormatted}
 chmod 600 /root/.ssh/authorized_keys || true
 
-# 3. Mount /home subvolume if not yet mounted, then create default homelab user
+# 3. Mount subvolumes if not yet mounted, then create default homelab user
 mount /home 2>/dev/null || true
+mount /var 2>/dev/null || true
+mount /usr/local 2>/dev/null || true
+mount /opt 2>/dev/null || true
+mount /srv 2>/dev/null || true
 useradd -m -U -G wheel "${username}" || true
 mkdir -pm700 "/home/${username}/.ssh"
 ${userSshFormatted}
