@@ -11,6 +11,8 @@ kubeconfig
 kubeconfig/
 kubeconfig*
 *.kubeconfig
+config/hosts.yaml
+config/hosts.local.yaml
 
 # Dynamic Data & State
 data/state.json

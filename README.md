@@ -78,7 +78,29 @@ Hệ thống quản lý profile cài đặt theo mô hình **Profile Registry Ma
 
 ## 3. Cấu Hình Khai Báo Máy Chủ (`config/hosts.yaml`)
 
-Mọi node trong mạng được quản lý theo mô hình khai báo (**Declarative Infrastructure**):
+Mọi node trong mạng được quản lý theo mô hình khai báo (**Declarative Infrastructure**).
+
+### 3.1. Khởi Tạo File Cấu Hình
+
+File `config/hosts.yaml` lưu trữ thông tin nhạy cảm của bạn (như SSH public key, danh sách MAC, địa chỉ IP) và được bảo vệ trong `.gitignore`.
+
+Khởi tạo cấu hình ban đầu bằng cách copy file mẫu:
+```bash
+# Dùng file cấu hình mẫu tổng hợp (khuyên dùng):
+cp config/hosts.example.yaml config/hosts.yaml
+
+# Hoặc dùng các template chuyên biệt theo từng hệ điều hành trong thư mục config/examples/:
+# - Ubuntu (Generic / K3s Single-Node qua NFS root):
+#   cp config/examples/hosts.ubuntu.yaml config/hosts.yaml
+# - openSUSE Leap Micro (Generic / RKE2 Single-Node + ArgoCD GitOps):
+#   cp config/examples/hosts.suse-micro.yaml config/hosts.yaml
+# - Talos Linux (Controlplane / Worker):
+#   cp config/examples/hosts.talos.yaml config/hosts.yaml
+```
+
+> **Cơ chế Tự Động Fallback**: Khi bạn vừa clone dự án về hoặc chạy trên môi trường CI mà chưa tạo file `config/hosts.yaml`, `ConfigManager` sẽ tự động đọc từ `config/hosts.example.yaml` (kèm cảnh báo nhẹ) để server và test suite luôn hoạt động ổn định.
+
+### 3.2. Cấu Trúc File Cấu Hình Mẫu
 
 ```yaml
 # Cấu hình mặc định áp dụng khi gặp máy lạ (MAC chưa đăng ký)

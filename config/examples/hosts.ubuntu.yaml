@@ -1,0 +1,66 @@
+# ==============================================================================
+# Ubuntu Server Configuration Example (Subiquity & Cloud-Init)
+# ==============================================================================
+# Hướng dẫn sử dụng:
+# Copy nội dung hoặc toàn bộ file này vào config/hosts.yaml:
+#   cp config/examples/hosts.ubuntu.yaml config/hosts.yaml
+# ==============================================================================
+
+# Default profile áp dụng khi node khởi động chưa được đăng ký địa chỉ MAC
+default:
+  os: ubuntu
+  version: "24.04"
+  profile: generic
+  user: homelab
+  # Optional: hash mật khẩu SHA-512 (mặc định nếu bỏ trống là 'ubuntu')
+  # password_hash: "$6$rounds=4096$homelab$..."
+  ssh_authorized_keys:
+    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLEKEYPLACEHOLDER00000000000000000000000 user@homelab.local"
+  storage:
+    layout: direct
+    target_disk: "/dev/sda"
+  network:
+    dhcp: true
+
+# Danh sách máy chủ Ubuntu khai báo theo địa chỉ MAC
+hosts:
+  # ----------------------------------------------------------------------------
+  # 1. K3s Single-Node Node (NFS Root Boot - Tốc độ cao, không cần ghi đè disk)
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:24:33":
+    hostname: "k3s-single-node"
+    note: "Ubuntu 24.04 LTS chạy K3s Single-Node qua NFS root boot"
+    os: ubuntu
+    version: "24.04"
+    profile: k3s-single-node
+    custom:
+      boot_method: nfs
+      nfs_root: "192.168.250.4:/srv/nfs/ubuntu-${version}"
+      k3s_version: "v1.31.0+k3s1"
+    network:
+      dhcp: false
+      ip: "192.168.250.33"
+      netmask: "255.255.255.0"
+      gateway: "192.168.250.1"
+      nameservers: ["192.168.250.1", "1.1.1.1"]
+    storage:
+      target_disk: "/dev/sda"
+    force_install: false
+
+  # ----------------------------------------------------------------------------
+  # 2. Ubuntu Server Cài Trực Tiếp Lên Đĩa Cứng (Direct Disk Install / Subiquity)
+  # ----------------------------------------------------------------------------
+  "00:11:22:33:44:55":
+    hostname: "ubuntu-srv-01"
+    note: "Ubuntu 24.04 cài đặt tự động qua Subiquity Autoinstall lên đĩa /dev/sda"
+    os: ubuntu
+    version: "24.04"
+    profile: generic
+    custom:
+      boot_method: direct
+    network:
+      dhcp: true
+    storage:
+      layout: direct
+      target_disk: "/dev/sda"
+    force_install: false

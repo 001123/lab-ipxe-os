@@ -1,0 +1,60 @@
+# ==============================================================================
+# Talos Linux Configuration Example (Immutable & API-driven OS)
+# ==============================================================================
+# Hướng dẫn sử dụng:
+# Copy nội dung hoặc toàn bộ file này vào config/hosts.yaml:
+#   cp config/examples/hosts.talos.yaml config/hosts.yaml
+# ==============================================================================
+
+# Default profile áp dụng cho các node Talos Linux chưa đăng ký MAC
+default:
+  os: talos
+  version: "v1.14.0"
+  profile: generic
+  role: worker
+  storage:
+    target_disk: "/dev/sda"
+  network:
+    dhcp: true
+
+# Danh sách node Talos Linux
+hosts:
+  # ----------------------------------------------------------------------------
+  # 1. Talos Controlplane Node (Static IP, Custom CNI)
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:24:36":
+    hostname: "talos-cp-01"
+    note: "Talos Linux Kubernetes Controlplane node với IP tĩnh"
+    os: talos
+    version: "v1.14.0"
+    role: "controlplane" # 'controlplane' hoặc 'worker'
+    custom:
+      clusterName: "talos-homelab"
+      cni: "flannel" # 'flannel', 'cilium', 'none'
+    network:
+      dhcp: false
+      interface: "eth0"
+      ip: "192.168.250.36"
+      netmask: "255.255.255.0"
+      gateway: "192.168.250.1"
+      nameservers: ["192.168.250.1", "1.1.1.1"]
+    storage:
+      target_disk: "/dev/sda"
+    force_install: false
+
+  # ----------------------------------------------------------------------------
+  # 2. Talos Worker Node (DHCP)
+  # ----------------------------------------------------------------------------
+  "00:11:22:33:44:77":
+    hostname: "talos-worker-01"
+    note: "Talos Linux Kubernetes Worker node nhận IP qua DHCP"
+    os: talos
+    version: "v1.14.0"
+    role: "worker"
+    custom:
+      clusterName: "talos-homelab"
+    network:
+      dhcp: true
+    storage:
+      target_disk: "/dev/sda"
+    force_install: false

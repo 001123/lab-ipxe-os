@@ -52,6 +52,14 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(host.network?.dhcp).toBe(true);
       expect(host.ssh_authorized_keys?.[0]).toContain("AAAAC3NzaC1lZDI1NTE5AAAAIPaWkIWwJqchLwmCMSN3hmUDVg08y3SU5L544sJSFpbW");
     });
+
+    it("should fallback to hosts.example.yaml when target configPath does not exist", () => {
+      const fallbackMgr = new ConfigManager("./config/non-existent-hosts.yaml");
+      const config = fallbackMgr.loadHostsConfig();
+      expect(config.default).toBeDefined();
+      expect(config.hosts?.["bc:24:11:00:24:33"]).toBeDefined();
+      expect(config.hosts?.["bc:24:11:00:24:33"].hostname).toBe("k3s-single-node");
+    });
   });
 
   describe("StateManager", () => {

@@ -1,0 +1,70 @@
+# ==============================================================================
+# openSUSE Leap Micro Configuration Example (Combustion Engine)
+# ==============================================================================
+# Hướng dẫn sử dụng:
+# Copy nội dung hoặc toàn bộ file này vào config/hosts.yaml:
+#   cp config/examples/hosts.suse-micro.yaml config/hosts.yaml
+# ==============================================================================
+
+# Default profile áp dụng cho các node openSUSE Leap Micro chưa đăng ký MAC
+default:
+  os: suse-micro
+  version: "6.2"
+  profile: generic
+  user: root
+  # Optional: hash mật khẩu SHA-512
+  # password_hash: "$6$rounds=4096$homelab$..."
+  ssh_authorized_keys:
+    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLEKEYPLACEHOLDER00000000000000000000000 user@homelab.local"
+  storage:
+    layout: direct
+    target_disk: "/dev/sda"
+  network:
+    dhcp: true
+
+# Danh sách node openSUSE Leap Micro
+hosts:
+  # ----------------------------------------------------------------------------
+  # 1. RKE2 Single-Node Kubernetes kèm ArgoCD GitOps Integration
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:24:35":
+    hostname: "rke2-micro-node"
+    note: "openSUSE Leap Micro 6.2 cài đặt RKE2 Single-Node và ArgoCD GitOps"
+    os: suse-micro
+    version: "6.2"
+    profile: rke2-single-node
+    custom:
+      rke2_version: "v1.31.0+rke2r1" # Để trống nếu muốn lấy phiên bản stable mới nhất
+      rke2_token: "secret-cluster-token-12345" # Token cluster (tùy chọn)
+      rke2_cni: "canal" # 'canal', 'cilium', hoặc 'calico'
+      rke2_ingress: "traefik" # Ingress controller tích hợp
+      # Tùy chọn kích hoạt ArgoCD & GitOps tự động:
+      argocd: true
+      argocd_hostname: "argocd.192.168.250.35.nip.io"
+      gitops_repo: "https://github.com/your-username/homelab-gitops.git"
+      gitops_branch: "main"
+      gitops_path: "apps"
+    network:
+      dhcp: false
+      ip: "192.168.250.35"
+      netmask: "255.255.255.0"
+      gateway: "192.168.250.1"
+      nameservers: ["192.168.250.1", "1.1.1.1"]
+    storage:
+      target_disk: "/dev/sda"
+    force_install: false
+
+  # ----------------------------------------------------------------------------
+  # 2. openSUSE Leap Micro Generic Node (Chạy Container Podman / Quadlet)
+  # ----------------------------------------------------------------------------
+  "00:11:22:33:44:66":
+    hostname: "micro-app-node"
+    note: "openSUSE Leap Micro 6.2 thuần, dùng cho tải ứng dụng Podman"
+    os: suse-micro
+    version: "6.2"
+    profile: generic
+    network:
+      dhcp: true
+    storage:
+      target_disk: "/dev/sda"
+    force_install: false

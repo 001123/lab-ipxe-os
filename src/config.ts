@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import YAML from "yaml";
 import type { HostConfig, HostsFileStructure } from "./types.ts";
 
@@ -35,26 +35,43 @@ export class ConfigManager {
   }
 
   public loadHostsConfig(): HostsFileStructure {
-    if (!existsSync(this.configPath)) {
-      return {
-        default: {
-          os: "ubuntu",
-          version: "24.04",
-          profile: "generic",
-          user: "homelab",
-          storage: { layout: "direct" },
-          network: { dhcp: true },
-        },
-        hosts: {},
-      };
+    let targetPath = this.configPath;
+
+    if (!existsSync(targetPath)) {
+      const dir = dirname(targetPath);
+      const candidateExample = resolve(dir, "hosts.example.yaml");
+      const rootExample = resolve("./config/hosts.example.yaml");
+
+      const fallbackExample = existsSync(candidateExample)
+        ? candidateExample
+        : existsSync(rootExample)
+          ? rootExample
+          : null;
+
+      if (fallbackExample) {
+        console.warn(`[Config] '${targetPath}' not found. Falling back to example config '${fallbackExample}'.`);
+        targetPath = fallbackExample;
+      } else {
+        return {
+          default: {
+            os: "ubuntu",
+            version: "24.04",
+            profile: "generic",
+            user: "homelab",
+            storage: { layout: "direct" },
+            network: { dhcp: true },
+          },
+          hosts: {},
+        };
+      }
     }
 
     try {
-      const raw = readFileSync(this.configPath, "utf-8");
+      const raw = readFileSync(targetPath, "utf-8");
       const parsed = YAML.parse(raw) as HostsFileStructure;
       return parsed || { default: { os: "ubuntu" }, hosts: {} };
     } catch (err) {
-      console.error(`[Config] Failed to parse YAML from ${this.configPath}:`, err);
+      console.error(`[Config] Failed to parse YAML from ${targetPath}:`, err);
       throw err;
     }
   }
