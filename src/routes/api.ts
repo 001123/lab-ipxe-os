@@ -142,18 +142,39 @@ export async function handleApiRoute(
     const dhcp = bodyData.dhcp !== undefined ? (bodyData.dhcp === "true" || bodyData.dhcp === true || bodyData.dhcp === "on") : !ip;
     const targetDisk = bodyData.target_disk || bodyData.disk || "/dev/sda";
 
-    // Custom properties (GitOps / K3s / RKE2)
-    const custom: Record<string, any> = {};
-    if (bodyData.k3s_version) custom.k3s_version = bodyData.k3s_version;
-    if (bodyData.rke2_version) custom.rke2_version = bodyData.rke2_version;
-    if (bodyData.boot_method) custom.boot_method = bodyData.boot_method;
-    if (bodyData.nfs_root) custom.nfs_root = bodyData.nfs_root;
-    if (bodyData.argocd === "true" || bodyData.argocd === true || bodyData.argocd === "on") {
-      custom.argocd = true;
-      if (bodyData.gitops_repo) custom.gitops_repo = bodyData.gitops_repo;
-      if (bodyData.gitops_branch) custom.gitops_branch = bodyData.gitops_branch;
-      if (bodyData.gitops_path) custom.gitops_path = bodyData.gitops_path;
-      if (bodyData.argocd_hostname) custom.argocd_hostname = bodyData.argocd_hostname;
+    // Custom properties (GitOps / K3s / RKE2 / custom_json)
+    let custom: Record<string, any> = {};
+    if (bodyData.custom_json !== undefined && bodyData.custom_json !== null) {
+      const trimmed = bodyData.custom_json.toString().trim();
+      if (trimmed) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (typeof parsed !== "object" || Array.isArray(parsed) || parsed === null) {
+            return new Response(JSON.stringify({ error: "custom_json must be a valid JSON object." }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          custom = parsed;
+        } catch (err: any) {
+          return new Response(JSON.stringify({ error: `Invalid JSON in custom_json: ${err.message}` }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+    } else {
+      if (bodyData.k3s_version) custom.k3s_version = bodyData.k3s_version;
+      if (bodyData.rke2_version) custom.rke2_version = bodyData.rke2_version;
+      if (bodyData.boot_method) custom.boot_method = bodyData.boot_method;
+      if (bodyData.nfs_root) custom.nfs_root = bodyData.nfs_root;
+      if (bodyData.argocd === "true" || bodyData.argocd === true || bodyData.argocd === "on") {
+        custom.argocd = true;
+        if (bodyData.gitops_repo) custom.gitops_repo = bodyData.gitops_repo;
+        if (bodyData.gitops_branch) custom.gitops_branch = bodyData.gitops_branch;
+        if (bodyData.gitops_path) custom.gitops_path = bodyData.gitops_path;
+        if (bodyData.argocd_hostname) custom.argocd_hostname = bodyData.argocd_hostname;
+      }
     }
 
     const hostPayload: HostConfig = {
@@ -273,19 +294,43 @@ export async function handleApiRoute(
     }
 
     // Custom patch
-    const custom = { ...(existing.custom || {}) };
-    if (bodyData.k3s_version !== undefined) custom.k3s_version = bodyData.k3s_version;
-    if (bodyData.rke2_version !== undefined) custom.rke2_version = bodyData.rke2_version;
-    if (bodyData.boot_method !== undefined) custom.boot_method = bodyData.boot_method;
-    if (bodyData.nfs_root !== undefined) custom.nfs_root = bodyData.nfs_root;
-    if (bodyData.argocd !== undefined) {
-      custom.argocd = bodyData.argocd === "true" || bodyData.argocd === true || bodyData.argocd === "on";
+    if (bodyData.custom_json !== undefined && bodyData.custom_json !== null) {
+      const trimmed = bodyData.custom_json.toString().trim();
+      if (!trimmed) {
+        // Empty textarea => overwrite to clear custom
+        patch.custom = {};
+      } else {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (typeof parsed !== "object" || Array.isArray(parsed) || parsed === null) {
+            return new Response(JSON.stringify({ error: "custom_json must be a valid JSON object." }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          patch.custom = parsed;
+        } catch (err: any) {
+          return new Response(JSON.stringify({ error: `Invalid JSON in custom_json: ${err.message}` }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+    } else {
+      const custom = { ...(existing.custom || {}) };
+      if (bodyData.k3s_version !== undefined) custom.k3s_version = bodyData.k3s_version;
+      if (bodyData.rke2_version !== undefined) custom.rke2_version = bodyData.rke2_version;
+      if (bodyData.boot_method !== undefined) custom.boot_method = bodyData.boot_method;
+      if (bodyData.nfs_root !== undefined) custom.nfs_root = bodyData.nfs_root;
+      if (bodyData.argocd !== undefined) {
+        custom.argocd = bodyData.argocd === "true" || bodyData.argocd === true || bodyData.argocd === "on";
+      }
+      if (bodyData.gitops_repo !== undefined) custom.gitops_repo = bodyData.gitops_repo;
+      if (bodyData.gitops_branch !== undefined) custom.gitops_branch = bodyData.gitops_branch;
+      if (bodyData.gitops_path !== undefined) custom.gitops_path = bodyData.gitops_path;
+      if (bodyData.argocd_hostname !== undefined) custom.argocd_hostname = bodyData.argocd_hostname;
+      patch.custom = custom;
     }
-    if (bodyData.gitops_repo !== undefined) custom.gitops_repo = bodyData.gitops_repo;
-    if (bodyData.gitops_branch !== undefined) custom.gitops_branch = bodyData.gitops_branch;
-    if (bodyData.gitops_path !== undefined) custom.gitops_path = bodyData.gitops_path;
-    if (bodyData.argocd_hostname !== undefined) custom.argocd_hostname = bodyData.argocd_hostname;
-    patch.custom = custom;
 
     const updated = stateMgr.updateHost(cleanMac, patch);
 

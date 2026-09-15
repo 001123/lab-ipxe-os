@@ -436,10 +436,7 @@ export class StateManager {
         ...existing.network,
         ...patch.network,
       },
-      custom: {
-        ...existing.custom,
-        ...patch.custom,
-      },
+      custom: patch.custom !== undefined ? patch.custom : existing.custom,
       updated_at: new Date().toISOString(),
     };
 

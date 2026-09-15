@@ -63,6 +63,22 @@
     }
   };
 
+  window.formatCustomJson = function (textareaId) {
+    const elem = document.getElementById(textareaId);
+    if (!elem) return;
+    const val = elem.value.trim();
+    if (!val) {
+      alert('Vui lòng nhập JSON trước khi bấm Format.');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(val);
+      elem.value = JSON.stringify(parsed, null, 2);
+    } catch (err) {
+      alert('Cú pháp JSON không hợp lệ:\n' + err.message);
+    }
+  };
+
   window.openEditModalFromRow = function (btn) {
     const d = btn.dataset;
     document.getElementById('edit-mac').value = d.mac || '';
@@ -77,11 +93,19 @@
     document.getElementById('edit-disk').value = d.disk || '/dev/sda';
     document.getElementById('edit-note').value = d.note ? decodeURIComponent(d.note) : '';
 
-    // GitOps fields
-    document.getElementById('edit-argocd').checked = d.argocd === '1';
-    document.getElementById('edit-gitops-repo').value = d.gitopsRepo || '';
-    document.getElementById('edit-gitops-branch').value = d.gitopsBranch || '';
-    document.getElementById('edit-gitops-path').value = d.gitopsPath || '';
+    // Custom JSON field
+    let customObj = {};
+    if (d.custom) {
+      try {
+        customObj = JSON.parse(decodeURIComponent(d.custom));
+      } catch (err) {
+        console.error('Failed to parse d.custom:', err);
+      }
+    }
+    const editCustomTextarea = document.getElementById('edit-custom-json');
+    if (editCustomTextarea) {
+      editCustomTextarea.value = Object.keys(customObj).length > 0 ? JSON.stringify(customObj, null, 2) : '';
+    }
 
     window.openModal('edit-node-modal');
   };
@@ -90,6 +114,20 @@
     e.preventDefault();
     const mac = document.getElementById('edit-mac').value.trim();
     if (!mac) return;
+
+    const customTextarea = document.getElementById('edit-custom-json');
+    if (customTextarea && customTextarea.value.trim()) {
+      try {
+        const parsed = JSON.parse(customTextarea.value.trim());
+        if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
+          throw new Error('Custom JSON phải là một đối tượng JSON (object dạng {}).');
+        }
+      } catch (err) {
+        alert('Cú pháp Custom JSON không hợp lệ:\n' + err.message);
+        customTextarea.focus();
+        return;
+      }
+    }
 
     const form = document.getElementById('edit-node-form');
     const formData = new FormData(form);
@@ -244,6 +282,34 @@
   });
 
   // HTMX Event Listeners
+  document.addEventListener('htmx:configRequest', (evt) => {
+    // Validate add-node-form custom JSON before HTMX sends request
+    if (evt.detail.elt && evt.detail.elt.id === 'add-node-form') {
+      const textarea = document.getElementById('add-custom-json');
+      if (textarea && textarea.value.trim()) {
+        try {
+          const parsed = JSON.parse(textarea.value.trim());
+          if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
+            throw new Error('Custom JSON phải là một đối tượng JSON (object dạng {}).');
+          }
+        } catch (err) {
+          alert('Cú pháp Custom JSON không hợp lệ:\n' + err.message);
+          textarea.focus();
+          evt.preventDefault();
+        }
+      }
+    }
+  });
+
+  document.addEventListener('htmx:responseError', (evt) => {
+    let msg = 'Đã xảy ra lỗi khi gửi yêu cầu.';
+    try {
+      const err = JSON.parse(evt.detail.xhr.responseText);
+      if (err.error) msg = err.error;
+    } catch {}
+    alert(`Lỗi: ${msg}`);
+  });
+
   document.addEventListener('htmx:afterRequest', (evt) => {
     // If add-node-form was submitted successfully, close modal and reset form
     if (evt.detail.elt && evt.detail.elt.id === 'add-node-form' && evt.detail.successful) {

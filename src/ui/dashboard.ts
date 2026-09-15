@@ -66,7 +66,7 @@ export function renderNodeRow(host: DashboardHostItem, baseUrl: string): string 
   const osName = host.os === "suse-micro" ? "openSUSE Leap Micro" : host.os === "ubuntu" ? "Ubuntu Server" : host.os;
   const osBadgeClass = host.os === "suse-micro" ? "tag-suse" : "tag-ubuntu";
 
-  const cfg = host.rawConfig || ({} as any);
+  const cfg = host.rawConfig || (host as any);
   const net = cfg.network || {};
   const stor = cfg.storage || {};
   const custom = cfg.custom || {};
@@ -114,6 +114,7 @@ export function renderNodeRow(host: DashboardHostItem, baseUrl: string): string 
             data-gitops-branch="${custom.gitops_branch || ""}"
             data-gitops-path="${custom.gitops_path || ""}"
             data-argocd-hostname="${custom.argocd_hostname || ""}"
+            data-custom="${encodeURIComponent(JSON.stringify(custom || {}))}"
           >
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -494,24 +495,33 @@ export function renderDashboardHtml(context: {
               </div>
             </div>
 
-            <!-- GitOps & K8s Parameters -->
+            <!-- Custom JSON Parameters -->
             <div class="column is-12 py-2">
-              <div class="box p-3 has-background-dark-ter" style="border: 1px solid var(--bulma-border-weak, rgba(255,255,255,0.1));">
-                <label class="checkbox is-size-7 has-text-weight-bold mb-2 is-block">
-                  <input type="checkbox" name="argocd" value="true"> Enable ArgoCD &amp; GitOps Bootstrapping
-                </label>
-                <div class="columns is-multiline is-gapless mb-0">
-                  <div class="column is-12 mb-2">
-                    <input class="input is-small" type="text" name="gitops_repo" placeholder="GitOps Repo URL (https://github.com/...)">
-                  </div>
-                  <div class="column is-6 pr-1">
-                    <input class="input is-small" type="text" name="gitops_branch" placeholder="Branch (e.g. main)">
-                  </div>
-                  <div class="column is-6 pl-1">
-                    <input class="input is-small" type="text" name="gitops_path" placeholder="Path (e.g. apps or bootstrap)">
-                  </div>
-                </div>
+              <div class="is-flex is-justify-content-space-between is-align-items-center mb-1">
+                <label class="label is-small mb-0">Custom JSON (Metadata / GitOps / K8s)</label>
+                <button type="button" class="button is-ghost is-small py-0 px-1 has-text-info" style="font-size: 0.75rem; text-decoration: none;" onclick="formatCustomJson('add-custom-json')">
+                  <svg style="width:12px;height:12px;margin-right:4px;vertical-align:-1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="16 18 22 12 16 6"></polyline>
+                    <polyline points="8 6 2 12 8 18"></polyline>
+                  </svg>
+                  Format JSON
+                </button>
               </div>
+              <div class="control">
+                <textarea
+                  id="add-custom-json"
+                  name="custom_json"
+                  class="textarea is-small is-family-monospace"
+                  rows="4"
+                  placeholder='{
+  "argocd": true,
+  "gitops_repo": "https://github.com/org/gitops.git",
+  "gitops_branch": "main",
+  "gitops_path": "apps"
+}'
+                ></textarea>
+              </div>
+              <p class="help has-text-grey">Tuỳ chọn: Nhập JSON tuỳ biến (ví dụ: argocd, gitops_repo, k3s_version, boot_method...).</p>
             </div>
           </div>
         </section>
@@ -618,24 +628,33 @@ export function renderDashboardHtml(context: {
               </div>
             </div>
 
-            <!-- GitOps & K8s Parameters -->
+            <!-- Custom JSON Parameters -->
             <div class="column is-12 py-2">
-              <div class="box p-3 has-background-dark-ter" style="border: 1px solid var(--bulma-border-weak, rgba(255,255,255,0.1));">
-                <label class="checkbox is-size-7 has-text-weight-bold mb-2 is-block">
-                  <input id="edit-argocd" type="checkbox" name="argocd" value="true"> Enable ArgoCD &amp; GitOps Bootstrapping
-                </label>
-                <div class="columns is-multiline is-gapless mb-0">
-                  <div class="column is-12 mb-2">
-                    <input id="edit-gitops-repo" class="input is-small" type="text" name="gitops_repo" placeholder="GitOps Repo URL (https://github.com/...)">
-                  </div>
-                  <div class="column is-6 pr-1">
-                    <input id="edit-gitops-branch" class="input is-small" type="text" name="gitops_branch" placeholder="Branch (e.g. main)">
-                  </div>
-                  <div class="column is-6 pl-1">
-                    <input id="edit-gitops-path" class="input is-small" type="text" name="gitops_path" placeholder="Path (e.g. apps or bootstrap)">
-                  </div>
-                </div>
+              <div class="is-flex is-justify-content-space-between is-align-items-center mb-1">
+                <label class="label is-small mb-0">Custom JSON (Metadata / GitOps / K8s)</label>
+                <button type="button" class="button is-ghost is-small py-0 px-1 has-text-info" style="font-size: 0.75rem; text-decoration: none;" onclick="formatCustomJson('edit-custom-json')">
+                  <svg style="width:12px;height:12px;margin-right:4px;vertical-align:-1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="16 18 22 12 16 6"></polyline>
+                    <polyline points="8 6 2 12 8 18"></polyline>
+                  </svg>
+                  Format JSON
+                </button>
               </div>
+              <div class="control">
+                <textarea
+                  id="edit-custom-json"
+                  name="custom_json"
+                  class="textarea is-small is-family-monospace"
+                  rows="4"
+                  placeholder='{
+  "argocd": true,
+  "gitops_repo": "https://github.com/org/gitops.git",
+  "gitops_branch": "main",
+  "gitops_path": "apps"
+}'
+                ></textarea>
+              </div>
+              <p class="help has-text-grey">Tuỳ chọn: Nhập JSON tuỳ biến. Dữ liệu này sẽ ghi đè thuộc tính custom của node.</p>
             </div>
           </div>
         </section>
