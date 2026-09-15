@@ -213,7 +213,10 @@ openSUSE Leap Micro sử dụng công cụ cấu hình ban đầu mang tên **Co
 
 Hệ thống hỗ trợ 2 profile cho openSUSE Leap Micro qua thư mục [`src/providers/suse-micro/profiles/`](file:///Users/timi/lab/lab-ipxe-os/src/providers/suse-micro/profiles/):
 - **`generic`** ([generic.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/suse-micro/profiles/generic.ts)): Cài các gói cơ bản (`curl`, `git`, `qemu-guest-agent`) và mở rộng Btrfs root filesystem.
-- **`rke2-single-node`** ([rke2-single-node.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/suse-micro/profiles/rke2-single-node.ts)): Tự động cài đặt **Rancher RKE2** bằng RPM method chính thức, cấu hình SELinux permissive, tắt swap & firewalld, bật sysctl/modules Kubernetes, cấu hình CNI (Canal / Cilium), Ingress (Traefik / NGINX), và tạo symlink kubeconfig.
+- **`rke2-single-node`** ([rke2-single-node.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/suse-micro/profiles/rke2-single-node.ts)): Tự động cài đặt **Rancher RKE2** bằng RPM method chính thức, cấu hình SELinux permissive, tắt swap & firewalld, bật sysctl/modules Kubernetes (vm.max_map_count = 262144), tắt auto-reboot ban đêm (`rebootmgr strategy=off`), cấu hình crictl socket, cấu hình CNI (Canal / Cilium), Ingress (Traefik / NGINX), và tạo symlink kubeconfig.
+
+> [!TIP]
+> Hướng dẫn chi tiết về vận hành, cập nhật hệ điều hành định kỳ (`transactional-update`), quản lý snapshot Btrfs (`snapper`), rollback sự cố và chính sách reboot xem tại: [docs/suse-micro-update-guide.md](file:///Users/timi/lab/lab-ipxe-os/docs/suse-micro-update-guide.md).
 
 ---
 

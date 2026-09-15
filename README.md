@@ -70,7 +70,7 @@ Hệ thống quản lý profile cài đặt theo mô hình **Profile Registry Ma
 
 | Profile | Gói cài đặt sẵn | Tinh chỉnh hệ thống tự động |
 | :--- | :--- | :--- |
-| **`rke2-single-node`** *(Cụm RKE2)* | `curl`, `ca-certificates`, `tar`, `gzip`, `qemu-guest-agent`, `nfs-client`, `open-iscsi` | - Cài Rancher RKE2 qua RPM method chính thức<br>- Cấu hình SELinux permissive & tắt swap/firewalld<br>- Tinh chỉnh sysctl mạng K8s và nạp modules `overlay`, `br_netfilter`<br>- Tạo file `/etc/rancher/rke2/config.yaml` hỗ trợ CNI (`canal`/`cilium`), Ingress, token, dynamic TLS SAN<br>- Kích hoạt systemd `rke2-server.service` và tạo symlink `~/.kube/config` |
+| **`rke2-single-node`** *(Cụm RKE2)* | `curl`, `ca-certificates`, `tar`, `gzip`, `qemu-guest-agent`, `nfs-client`, `open-iscsi` | - Cài Rancher RKE2 qua RPM method chính thức<br>- Cấu hình SELinux permissive & tắt swap/firewalld<br>- Tinh chỉnh sysctl K8s (`vm.max_map_count = 262144`, `fs.file-max`)<br>- Tắt auto-reboot ban đêm (`rebootmgr strategy=off`)<br>- Bổ sung `/sbin` vào PATH & cấu hình `/etc/crictl.yaml`<br>- Tạo file `/etc/rancher/rke2/config.yaml` hỗ trợ CNI (`canal`/`cilium`), Ingress, token, dynamic TLS SAN<br>- Kích hoạt systemd `rke2-server.service` và tạo symlink `~/.kube/config`<br>*(Xem [Hướng dẫn Quản trị & Cập nhật openSUSE Leap Micro](docs/suse-micro-update-guide.md))* |
 | **`generic`** | `curl`, `qemu-guest-agent`, `git` | Cấu hình hệ thống cơ bản và tự động mở rộng Btrfs filesystem (`btrfs filesystem resize max /`) |
 
 

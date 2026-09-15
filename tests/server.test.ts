@@ -385,6 +385,10 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(script).toContain("btrfs filesystem resize max /");
       expect(script).toContain("systemctl disable firewalld");
       expect(script).toContain("net.ipv4.ip_forward");
+      expect(script).toContain("vm.max_map_count                    = 262144");
+      expect(script).toContain("fs.file-max                         = 2097152");
+      expect(script).toContain("strategy=off");
+      expect(script).toContain("systemctl try-restart rebootmgr");
       expect(script).toContain("overlay");
       expect(script).toContain("br_netfilter");
       expect(script).toContain("write-kubeconfig-mode: \"0644\"");
@@ -395,6 +399,9 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(script).toContain("INSTALL_RKE2_METHOD=rpm");
       expect(script).toContain("systemctl enable rke2-server.service");
       expect(script).toContain("KUBECONFIG=/etc/rancher/rke2/rke2.yaml");
+      expect(script).toContain("/etc/crictl.yaml");
+      expect(script).toContain("unix:///run/k3s/containerd/containerd.sock");
+      expect(script).toContain("/sbin:/usr/sbin");
       expect(script).toContain(".kube/config");
     });
 
