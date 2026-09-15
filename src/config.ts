@@ -105,6 +105,7 @@ export class ConfigManager {
         ...(matchedHost?.extra_packages || []),
       ],
       force_install: matchedHost?.force_install ?? false,
+      note: matchedHost?.note || defaults.note || undefined,
       custom: {
         ...defaults.custom,
         ...matchedHost?.custom,

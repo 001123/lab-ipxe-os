@@ -27,6 +27,7 @@ export interface HostConfig {
   network?: NetworkConfig;
   extra_packages?: string[];
   force_install?: boolean;
+  note?: string;
   custom?: Record<string, any>;
 }
 
@@ -61,6 +62,7 @@ export interface StateRecord {
   os?: string;
   installed_at: string;
   client_ip?: string;
+  note?: string;
 }
 
 export interface AppState {

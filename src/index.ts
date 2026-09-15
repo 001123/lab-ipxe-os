@@ -72,6 +72,7 @@ Useful Endpoints:
 - iPXE Chain URL:     ${configMgr.appConfig.baseUrl}/boot.ipxe?mac=\${net0/mac}
 - Asset Mirror:       ${configMgr.appConfig.baseUrl}/assets/
 - Host API:           ${configMgr.appConfig.baseUrl}/api/hosts
+- Update Note API:     ${configMgr.appConfig.baseUrl}/api/note
 - Phone-Home Webhook: ${configMgr.appConfig.baseUrl}/api/installed?mac=<MAC>
 - Kubeconfig API:     ${configMgr.appConfig.baseUrl}/api/kubeconfig/<hostname|MAC>
 `,

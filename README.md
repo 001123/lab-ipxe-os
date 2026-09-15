@@ -102,6 +102,7 @@ hosts:
   # ----------------------------------------------------------------------------
   "bc:24:11:00:24:33":
     hostname: "k3s-single-node"
+    note: "VM Ubuntu 24.04 chạy K3s Single-Node (NFS root boot)"
     os: ubuntu
     version: "24.04"
     profile: k3s-single-node
@@ -318,7 +319,13 @@ docker compose logs -f
   ```bash
   curl -X POST "http://localhost:3000/api/reset?mac=bc:24:11:00:24:33"
   ```
-- **Webhook Phone-Home** (Cloud-Init gọi khi hoàn thành cài đặt):
+- **Cập nhật ghi chú cho node (Lưu vào `data/state.json`)**:
+  ```bash
+  curl -X POST "http://localhost:3000/api/note" \
+    -H "Content-Type: application/json" \
+    -d '{"mac": "bc:24:11:00:24:33", "note": "Node master K3s phòng lab"}'
+  ```
+- **Webhook Phone-Home** (Cloud-Init gọi khi hoàn thành cài đặt, tự động kế thừa `note` từ `hosts.yaml`):
   ```bash
   curl -X POST "http://localhost:3000/api/installed?mac=bc:24:11:00:24:33&hostname=k3s-single-node&os=ubuntu"
   ```

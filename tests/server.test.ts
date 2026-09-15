@@ -37,6 +37,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(host.hostname).toBe("k3s-single-node");
       expect(host.os).toBe("ubuntu");
       expect(host.profile).toBe("k3s-single-node");
+      expect(host.note).toBe("VM Ubuntu 24.04 chạy K3s Single-Node (NFS root boot)");
       expect(host.network?.dhcp).toBe(false);
       expect(host.network?.ip).toBe("192.168.250.33");
       expect(host.network?.gateway).toBe("192.168.250.1");
@@ -60,8 +61,12 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
 
       expect(stateMgr.isInstalled(testMac)).toBe(false);
 
-      stateMgr.markInstalled(testMac, { hostname: "test-node", os: "ubuntu" });
+      stateMgr.markInstalled(testMac, { hostname: "test-node", os: "ubuntu", note: "Initial note" });
       expect(stateMgr.isInstalled(testMac)).toBe(true);
+      expect(stateMgr.getRecord(testMac)?.note).toBe("Initial note");
+
+      stateMgr.updateNote(testMac, "Updated note");
+      expect(stateMgr.getRecord(testMac)?.note).toBe("Updated note");
 
       stateMgr.resetInstalled(testMac);
       expect(stateMgr.isInstalled(testMac)).toBe(false);
@@ -215,6 +220,70 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(data.error).toContain("does not run a Kubernetes cluster");
 
       await fetch(`${baseUrl}/api/reset?mac=${genericMac}`, { method: "POST" });
+    });
+
+    it("GET /api/hosts should return registered hosts with note and install status", async () => {
+      const res = await fetch(`${baseUrl}/api/hosts`);
+      expect(res.status).toBe(200);
+      const hosts = (await res.json()) as any[];
+      const k3sHost = hosts.find((h) => h.mac === "bc:24:11:00:24:33");
+      expect(k3sHost).toBeDefined();
+      expect(k3sHost.note).toBe("VM Ubuntu 24.04 chạy K3s Single-Node (NFS root boot)");
+    });
+
+    it("POST /api/installed should inherit note from hosts.yaml or query parameter", async () => {
+      const testMac = "bc:24:11:00:24:33";
+
+      // 1. Inherits note from hosts.yaml if not provided
+      const resInherit = await fetch(`${baseUrl}/api/installed?mac=${testMac}&hostname=k3s-single-node&os=ubuntu`, {
+        method: "POST",
+      });
+      expect(resInherit.status).toBe(200);
+      const dataInherit = (await resInherit.json()) as any;
+      expect(dataInherit.record.note).toBe("VM Ubuntu 24.04 chạy K3s Single-Node (NFS root boot)");
+
+      // 2. Query param note overrides hosts.yaml
+      const resOverride = await fetch(`${baseUrl}/api/installed?mac=${testMac}&note=Custom+Override+Note`, {
+        method: "POST",
+      });
+      expect(resOverride.status).toBe(200);
+      const dataOverride = (await resOverride.json()) as any;
+      expect(dataOverride.record.note).toBe("Custom Override Note");
+
+      // Restore original note
+      await fetch(`${baseUrl}/api/note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mac: testMac, note: "VM Ubuntu 24.04 chạy K3s Single-Node (NFS root boot)" }),
+      });
+    });
+
+    it("POST /api/note should update node note dynamically in state.json", async () => {
+      const testMac = "bc:24:11:00:24:33";
+      const tempNote = "Temporary custom note for node";
+      const originalNote = "VM Ubuntu 24.04 chạy K3s Single-Node (NFS root boot)";
+
+      const res = await fetch(`${baseUrl}/api/note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mac: testMac, note: tempNote }),
+      });
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as any;
+      expect(data.success).toBe(true);
+      expect(data.record.note).toBe(tempNote);
+
+      // Verify GET /api/state reflects updated note
+      const stateRes = await fetch(`${baseUrl}/api/state`);
+      const stateData = (await stateRes.json()) as any;
+      expect(stateData[testMac]?.note).toBe(tempNote);
+
+      // Restore original note
+      await fetch(`${baseUrl}/api/note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mac: testMac, note: originalNote }),
+      });
     });
   });
 

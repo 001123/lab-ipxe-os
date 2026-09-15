@@ -55,7 +55,7 @@ export class StateManager {
 
   public markInstalled(
     mac: string,
-    info: { hostname?: string; os?: string; clientIp?: string } = {}
+    info: { hostname?: string; os?: string; clientIp?: string; note?: string } = {}
   ): StateRecord {
     const cleanMac = this.normalizeMac(mac);
     const record: StateRecord = {
@@ -63,12 +63,30 @@ export class StateManager {
       hostname: info.hostname,
       os: info.os,
       client_ip: info.clientIp,
+      note: info.note,
       installed_at: new Date().toISOString(),
     };
     this.state.installed[cleanMac] = record;
     this.save();
     console.log(`[State] Marked MAC ${cleanMac} (${info.hostname || "unknown"}) as INSTALLED.`);
     return record;
+  }
+
+  public updateNote(mac: string, note: string): StateRecord | null {
+    const cleanMac = this.normalizeMac(mac);
+    const existing = this.state.installed[cleanMac];
+    if (existing) {
+      existing.note = note;
+      this.save();
+      console.log(`[State] Updated note for MAC ${cleanMac}.`);
+      return existing;
+    }
+    return null;
+  }
+
+  public getRecord(mac: string): StateRecord | undefined {
+    const cleanMac = this.normalizeMac(mac);
+    return this.state.installed[cleanMac];
   }
 
   public resetInstalled(mac: string): boolean {

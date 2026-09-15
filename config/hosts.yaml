@@ -27,6 +27,7 @@ hosts:
   # VM Ubuntu K3s
   "bc:24:11:00:24:33":
     hostname: "k3s-single-node"
+    note: "VM Ubuntu 24.04 chạy K3s Single-Node (NFS root boot)"
     os: ubuntu
     version: "24.04"
     profile: k3s-single-node
@@ -46,6 +47,7 @@ hosts:
   # VM RKE2 Micro SUSE
   "bc:24:11:00:24:35":
     hostname: "rke2-micro-node"
+    note: "VM openSUSE Leap Micro 6.2 chạy RKE2 Single-Node kết hợp ArgoCD GitOps"
     os: suse-micro
     version: "6.2"
     profile: rke2-single-node
@@ -97,6 +99,7 @@ hosts:
   # Bare-Metal RKE2 Micro SUSE
   "e8:9c:25:7b:af:d8":
     hostname: "rke2-single-node-i5"
+    note: "Bare-metal Intel i5 Server chạy RKE2 Single-Node trên openSUSE Leap Micro 6.2"
     os: suse-micro
     version: "6.2"
     profile: rke2-single-node

@@ -18,6 +18,8 @@ export async function handleApiRoute(
     let os = url.searchParams.get("os");
     let ip = url.searchParams.get("ip");
 
+    let note = url.searchParams.get("note");
+
     // Also attempt to read JSON body if query params are missing
     if (req.headers.get("content-type")?.includes("application/json")) {
       try {
@@ -26,6 +28,7 @@ export async function handleApiRoute(
         hostname = hostname || body.hostname;
         os = os || body.os;
         ip = ip || body.ip || body.client_ip;
+        note = note ?? body.note;
       } catch {}
     }
 
@@ -55,12 +58,100 @@ export async function handleApiRoute(
       hostname: hostname || host.hostname,
       os: os || host.os,
       clientIp,
+      note: note || host.note,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
         message: `Host ${record.hostname} (${cleanMac}) recorded as installed.`,
+        record,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // POST /api/note
+  if (pathname === "/api/note" && method === "POST") {
+    let mac = url.searchParams.get("mac");
+    let identifier =
+      url.searchParams.get("id") ||
+      url.searchParams.get("identifier") ||
+      url.searchParams.get("hostname");
+    let note = url.searchParams.get("note");
+
+    if (req.headers.get("content-type")?.includes("application/json")) {
+      try {
+        const body = (await req.json()) as any;
+        mac = mac || body.mac;
+        identifier = identifier || body.id || body.identifier || body.hostname;
+        if (note === null || note === undefined) {
+          note = body.note;
+        }
+      } catch {}
+    }
+
+    const targetId = (mac || identifier || "").trim();
+    if (!targetId) {
+      return new Response(
+        JSON.stringify({ error: "Missing required parameter: 'mac' or 'hostname'" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (note === null || note === undefined) {
+      return new Response(
+        JSON.stringify({ error: "Missing required parameter: 'note'" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Resolve target MAC address
+    const cleanMac = configMgr.normalizeMac(targetId);
+    let resolvedMac = cleanMac;
+    const installed = stateMgr.getAllInstalled();
+    const hostsConfig = configMgr.loadHostsConfig();
+
+    if (!installed[cleanMac]) {
+      // Try resolving by hostname
+      const lowerTarget = targetId.toLowerCase();
+      let foundMac: string | null = null;
+      for (const [rawMac, record] of Object.entries(installed)) {
+        if (record.hostname?.toLowerCase() === lowerTarget) {
+          foundMac = configMgr.normalizeMac(rawMac);
+          break;
+        }
+      }
+      if (!foundMac && hostsConfig.hosts) {
+        for (const rawMac of Object.keys(hostsConfig.hosts)) {
+          const host = configMgr.getHost(rawMac);
+          if (host.hostname?.toLowerCase() === lowerTarget) {
+            foundMac = configMgr.normalizeMac(rawMac);
+            break;
+          }
+        }
+      }
+      if (foundMac) {
+        resolvedMac = foundMac;
+      }
+    }
+
+    // Update note in StateManager. If node is not yet in state.json, create a record for it
+    let record = stateMgr.updateNote(resolvedMac, String(note));
+    if (!record) {
+      const host = configMgr.getHost(resolvedMac);
+      record = stateMgr.markInstalled(resolvedMac, {
+        hostname: host.hostname,
+        os: host.os,
+        clientIp: host.network?.ip || "unknown",
+        note: String(note),
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `Note updated for host ${record.hostname || resolvedMac}.`,
         record,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
@@ -107,6 +198,7 @@ export async function handleApiRoute(
           os: resolved.os,
           version: resolved.version,
           profile: resolved.profile || resolved.role,
+          note: resolved.note,
           installed: Boolean(installed[cleanMac]),
           installed_info: installed[cleanMac] || null,
         });
