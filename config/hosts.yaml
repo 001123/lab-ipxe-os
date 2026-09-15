@@ -21,8 +21,10 @@ default:
 # Declarative Node Inventory mapped by MAC address (lowercase, colon-separated)
 hosts:
   # ----------------------------------------------------------------------------
-  # 1. Ubuntu Server 24.04 LTS (K3s Single-Node Cluster - Proxmox VM)
+  # VM Test
   # ----------------------------------------------------------------------------
+  
+  # VM Ubuntu K3s
   "bc:24:11:00:24:33":
     hostname: "k3s-single-node"
     os: ubuntu
@@ -41,33 +43,7 @@ hosts:
       target_disk: "/dev/sda"
     force_install: false
 
-  # ----------------------------------------------------------------------------
-  # 2. Template cho máy thật (Bare-Metal K3s Server)
-  # Bỏ comment và thay thế MAC của card mạng máy thật khi bạn sẵn sàng triển khai
-  # ----------------------------------------------------------------------------
-  "e8:9c:25:7b:af:d8":
-    hostname: "k3s-single-node-i5"
-    os: ubuntu
-    version: "24.04"
-    profile: k3s-single-node
-    custom:
-      boot_method: nfs
-      nfs_root: "192.168.250.4:/srv/nfs/ubuntu-24.04"
-      k3s_version: "v1.36.4+k3s1"
-    network:
-      dhcp: false
-      ip: "192.168.250.34"
-      netmask: "255.255.255.0"
-      gateway: "192.168.250.1"
-      nameservers: ["192.168.250.1", "1.1.1.1"]
-    storage:
-      target_disk: "/dev/sda"
-    force_install: false
-
-  # ----------------------------------------------------------------------------
-  # 3. Template cho openSUSE Leap Micro 6.2 (RKE2 Single-Node Server)
-  # Thay thế địa chỉ MAC bằng card mạng máy của bạn khi sẵn sàng triển khai
-  # ----------------------------------------------------------------------------
+  # VM RKE2 Micro SUSE
   "bc:24:11:00:24:35":
     hostname: "rke2-micro-node"
     os: suse-micro
@@ -81,6 +57,51 @@ hosts:
     network:
       dhcp: false
       ip: "192.168.250.35"
+      netmask: "255.255.255.0"
+      gateway: "192.168.250.1"
+      nameservers: ["192.168.250.1", "1.1.1.1"]
+    storage:
+      target_disk: "/dev/sda"
+    force_install: false
+
+  # ----------------------------------------------------------------------------
+  # (Bare-Metal K3s Server)
+  # ----------------------------------------------------------------------------
+
+  # Bare-Metal K3s Server
+  # "e8:9c:25:7b:af:d8":
+  #   hostname: "k3s-single-node-i5"
+  #   os: ubuntu
+  #   version: "24.04"
+  #   profile: k3s-single-node
+  #   custom:
+  #     boot_method: nfs
+  #     nfs_root: "192.168.250.4:/srv/nfs/ubuntu-24.04"
+  #     k3s_version: "v1.36.4+k3s1"
+  #   network:
+  #     dhcp: false
+  #     ip: "192.168.250.34"
+  #     netmask: "255.255.255.0"
+  #     gateway: "192.168.250.1"
+  #     nameservers: ["192.168.250.1", "1.1.1.1"]
+  #   storage:
+  #     target_disk: "/dev/sda"
+  #   force_install: false
+
+  # Bare-Metal RKE2 Micro SUSE
+  "e8:9c:25:7b:af:d8":
+    hostname: "rke2-single-node-i5"
+    os: suse-micro
+    version: "6.2"
+    profile: rke2-single-node
+    custom:
+      rke2_version: ""
+      rke2_token: ""
+      rke2_cni: "canal"
+      rke2_ingress: "traefik"
+    network:
+      dhcp: false
+      ip: "192.168.250.2"
       netmask: "255.255.255.0"
       gateway: "192.168.250.1"
       nameservers: ["192.168.250.1", "1.1.1.1"]

@@ -141,6 +141,27 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(restoredScript).toContain("menu Network Boot Menu");
     });
 
+    it("POST /api/installed should resolve client IP from host network config or query param", async () => {
+      // 1. Host with network.ip configured in hosts.yaml (bc:24:11:00:24:33)
+      const resHost = await fetch(`${baseUrl}/api/installed?mac=bc:24:11:00:24:33&hostname=k3s-single-node&os=ubuntu`, {
+        method: "POST",
+      });
+      const dataHost = (await resHost.json()) as any;
+      expect(dataHost.record.client_ip).toBe("192.168.250.33");
+
+      // 2. Explicit ip parameter overrides fallback
+      const resCustom = await fetch(`${baseUrl}/api/installed?mac=bc:24:11:00:24:33&ip=10.0.0.99`, {
+        method: "POST",
+      });
+      const dataCustom = (await resCustom.json()) as any;
+      expect(dataCustom.record.client_ip).toBe("10.0.0.99");
+
+      // Clean up / restore original state in state.json
+      await fetch(`${baseUrl}/api/installed?mac=bc:24:11:00:24:33&ip=192.168.250.33`, {
+        method: "POST",
+      });
+    });
+
     it("GET /assets/test.iso with Range header should return HTTP 206 Partial Content", async () => {
       const res = await fetch(`${baseUrl}/assets/test.iso`, {
         headers: { Range: "bytes=0-511" },
@@ -293,7 +314,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
     it("should return generic profile with base utilities and btrfs resize", () => {
       const profile = getSuseMicroProfile("generic", mockSuseHost, baseUrl);
       expect(profile.packages).toContain("curl");
-      expect(profile.packages).toContain("htop");
+      expect(profile.packages).toContain("qemu-guest-agent");
       expect(profile.packages).toContain("git");
       const script = profile.scriptSnippets.join("\n");
       expect(script).toContain("btrfs filesystem resize max /");

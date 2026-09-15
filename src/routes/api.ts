@@ -5,7 +5,8 @@ export async function handleApiRoute(
   req: Request,
   pathname: string,
   configMgr: ConfigManager,
-  stateMgr: StateManager
+  stateMgr: StateManager,
+  server?: any
 ): Promise<Response> {
   const url = new URL(req.url);
   const method = req.method.toUpperCase();
@@ -15,14 +16,16 @@ export async function handleApiRoute(
     let mac = url.searchParams.get("mac");
     let hostname = url.searchParams.get("hostname");
     let os = url.searchParams.get("os");
+    let ip = url.searchParams.get("ip");
 
     // Also attempt to read JSON body if query params are missing
-    if (!mac && req.headers.get("content-type")?.includes("application/json")) {
+    if (req.headers.get("content-type")?.includes("application/json")) {
       try {
         const body = (await req.json()) as any;
-        mac = body.mac;
-        hostname = body.hostname;
-        os = body.os;
+        mac = mac || body.mac;
+        hostname = hostname || body.hostname;
+        os = os || body.os;
+        ip = ip || body.ip || body.client_ip;
       } catch {}
     }
 
@@ -35,10 +38,23 @@ export async function handleApiRoute(
 
     const cleanMac = configMgr.normalizeMac(mac);
     const host = configMgr.getHost(cleanMac);
+
+    const socketIp = server?.requestIP?.(req)?.address?.replace(/^::ffff:/, "");
+    const forwardedIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+    const realIp = req.headers.get("x-real-ip")?.trim();
+
+    const clientIp =
+      ip ||
+      host.network?.ip ||
+      socketIp ||
+      forwardedIp ||
+      realIp ||
+      "unknown";
+
     const record = stateMgr.markInstalled(cleanMac, {
       hostname: hostname || host.hostname,
       os: os || host.os,
-      clientIp: req.headers.get("x-forwarded-for")?.split(",")[0] || "unknown",
+      clientIp,
     });
 
     return new Response(

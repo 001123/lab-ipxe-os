@@ -15,7 +15,7 @@ export const server = Bun.serve({
   port: configMgr.appConfig.port,
   hostname: configMgr.appConfig.host,
 
-  async fetch(req: Request): Promise<Response> {
+  async fetch(req: Request, serverInstance: any): Promise<Response> {
     const url = new URL(req.url);
     const pathname = url.pathname;
     console.log(`[HTTP] ${req.method} ${pathname}${url.search}`);
@@ -52,7 +52,7 @@ export const server = Bun.serve({
 
     // 4. Management & Webhook API Routes
     if (pathname.startsWith("/api/")) {
-      return await handleApiRoute(req, pathname, configMgr, stateMgr);
+      return await handleApiRoute(req, pathname, configMgr, stateMgr, serverInstance);
     }
 
     // 5. Root / Info Page
