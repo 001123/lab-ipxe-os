@@ -46,7 +46,9 @@ export class ConfigManager {
         ? candidateExample
         : existsSync(rootExample)
           ? rootExample
-          : null;
+          : existsSync(resolve("./config/hosts.yaml"))
+            ? resolve("./config/hosts.yaml")
+            : null;
 
       if (fallbackExample) {
         console.warn(`[Config] '${targetPath}' not found. Falling back to example config '${fallbackExample}'.`);

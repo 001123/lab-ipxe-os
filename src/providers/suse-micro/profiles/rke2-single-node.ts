@@ -121,11 +121,12 @@ ${versionEntry}  valuesContent: |-
 EOF
 
 # Fallback: if dynamic DHCP node IP detected, update nip.io domain if using hostname placeholder
-if [ -n "$NODE_IP" ] && grep -q "argocd.${host.hostname}.nip.io" /var/lib/rancher/rke2/server/manifests/argocd.yaml; then
+if [ -n "\${NODE_IP:-}" ] && grep -q "argocd.${host.hostname}.nip.io" /var/lib/rancher/rke2/server/manifests/argocd.yaml; then
   sed -i "s|argocd.${host.hostname}.nip.io|argocd.\${NODE_IP}.nip.io|g" /var/lib/rancher/rke2/server/manifests/argocd.yaml
 fi`,
 
         `# 13. Install helper script to retrieve ArgoCD admin password and URL
+mkdir -p /usr/local/bin
 cat <<'EOF' > /usr/local/bin/get-argocd-password
 #!/bin/sh
 export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
@@ -139,7 +140,8 @@ echo -n "Password: "
 echo ""
 echo "=================================================="
 EOF
-chmod 755 /usr/local/bin/get-argocd-password || true`,
+chmod 755 /usr/local/bin/get-argocd-password || true
+mkdir -p /usr/bin && ln -sf /usr/local/bin/get-argocd-password /usr/bin/get-argocd-password 2>/dev/null || true`,
       ]
     : [];
 
@@ -152,6 +154,7 @@ chmod 755 /usr/local/bin/get-argocd-password || true`,
       "qemu-guest-agent",
       "nfs-client",
       "open-iscsi",
+      "efibootmgr",
     ],
     scriptSnippets: [
       `# 1. Expand Btrfs root filesystem to full disk capacity`,
@@ -168,7 +171,8 @@ chmod 755 /usr/local/bin/get-argocd-password || true`,
       `systemctl stop firewalld || true`,
 
       `# 4. Configure Sysctl for Kubernetes networking`,
-      `cat <<'EOF' > /etc/sysctl.d/99-kubernetes.conf
+      `mkdir -p /etc/sysctl.d
+cat <<'EOF' > /etc/sysctl.d/99-kubernetes.conf
 net.bridge.bridge-nf-call-iptables  = 1
 net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
@@ -176,7 +180,8 @@ EOF
 sysctl --system || true`,
 
       `# 5. Pre-load required Kernel Modules`,
-      `cat <<'EOF' > /etc/modules-load.d/k8s.conf
+      `mkdir -p /etc/modules-load.d
+cat <<'EOF' > /etc/modules-load.d/k8s.conf
 overlay
 br_netfilter
 EOF
@@ -200,16 +205,16 @@ ${sanEntries}
 EOF`,
 
       `# 7. Fallback runtime check: append active DHCP IP to tls-san if not already present`,
-      `NODE_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7}')
-if [ -n "$NODE_IP" ] && ! grep -q "$NODE_IP" /etc/rancher/rke2/config.yaml; then
-  echo "  - \\"$NODE_IP\\"" >> /etc/rancher/rke2/config.yaml
+      `NODE_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7}' || true)
+if [ -n "\${NODE_IP:-}" ] && ! grep -q "\$NODE_IP" /etc/rancher/rke2/config.yaml; then
+  echo "  - \\"\$NODE_IP\\"" >> /etc/rancher/rke2/config.yaml
 fi`,
 
       `# 8. Install RKE2 using official RPM method for openSUSE Leap Micro`,
-      `echo "[Combustion RKE2] Installing RKE2 (${configuredRke2Version || "channel: stable"}) with RPM method..." | (tee -a /dev/console 2>/dev/null || cat)`,
+      `echo "[Combustion RKE2] Installing RKE2 (${configuredRke2Version || "channel: v1.36"}) with RPM method..." | (tee -a /dev/console 2>/dev/null || cat)`,
       configuredRke2Version
-        ? `curl -sfL https://get.rke2.io | INSTALL_RKE2_METHOD=rpm INSTALL_RKE2_TYPE=server INSTALL_RKE2_VERSION="${configuredRke2Version}" sh - 2>&1 | (tee -a /dev/console 2>/dev/null || cat)`
-        : `curl -sfL https://get.rke2.io | INSTALL_RKE2_METHOD=rpm INSTALL_RKE2_TYPE=server INSTALL_RKE2_CHANNEL=stable sh - 2>&1 | (tee -a /dev/console 2>/dev/null || cat)`,
+        ? `export TRANSACTIONAL_UPDATE=true; curl -sfL https://get.rke2.io | INSTALL_RKE2_METHOD=rpm INSTALL_RKE2_TYPE=server INSTALL_RKE2_VERSION="${configuredRke2Version}" sh - 2>&1 | (tee -a /dev/console 2>/dev/null || cat)`
+        : `export TRANSACTIONAL_UPDATE=true; curl -sfL https://get.rke2.io | INSTALL_RKE2_METHOD=rpm INSTALL_RKE2_TYPE=server INSTALL_RKE2_CHANNEL=v1.36 sh - 2>&1 | (tee -a /dev/console 2>/dev/null || cat)`,
 
       `# 9. Enable RKE2 and QEMU guest agent systemd services`,
       `systemctl enable rke2-server.service || true`,
@@ -217,7 +222,8 @@ fi`,
 
       `# 10. Configure CLI environment and PATH for homelab user and root`,
       `echo "KUBECONFIG=/etc/rancher/rke2/rke2.yaml" >> /etc/environment`,
-      `cat <<'EOF' > /etc/profile.d/rke2.sh
+      `mkdir -p /etc/profile.d
+cat <<'EOF' > /etc/profile.d/rke2.sh
 export PATH=$PATH:/var/lib/rancher/rke2/bin:/usr/local/bin
 export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
 EOF`,

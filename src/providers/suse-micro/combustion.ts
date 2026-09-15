@@ -62,6 +62,11 @@ done`
 # combustion: network
 set -euxo pipefail
 
+# Redirect stdout/stderr to console for live debugging visibility if console device exists
+if [ -c /dev/console ]; then
+  exec > >(tee -a /dev/console) 2>&1
+fi
+
 echo "=================================================="
 echo "Combustion script running for host: ${host.hostname}"
 echo "Profile: ${host.profile || "generic"}"
@@ -84,10 +89,11 @@ chmod 600 "/home/${username}/.ssh/authorized_keys" || true
 chown -R "${username}:${username}" "/home/${username}/.ssh" || true
 
 # 4. Enable passwordless sudo for wheel group
+mkdir -p /etc/sudoers.d
 echo "%wheel ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/wheel
 
 # 5. Enable SSH daemon & disable interactive firstboot wizard
-systemctl enable sshd
+systemctl enable sshd || true
 rm -f /var/lib/YaST2/reconfig_system || true
 systemctl disable jeos-firstboot.service || true
 
@@ -99,20 +105,24 @@ ${packageInstallSnippet}
 # 7. Apply Profile-specific configurations
 ${profileSnippets}
 
-# 8. Restore UEFI Network/PXE boot priority so iPXE StateManager retains control on bare-metal
-PXE_ID=$(efibootmgr 2>/dev/null | grep -Ei "IPv4|PXE|Network|Ethernet|IP4" | head -n 1 | sed -E "s/^Boot([0-9A-Fa-f]+).*/\\1/")
-CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep -i "^BootOrder:" | awk '{print $2}')
-if [ -n "$PXE_ID" ] && [ -n "$CURRENT_ORDER" ]; then
-  REST=$(echo "$CURRENT_ORDER" | tr "," "\\n" | grep -vi "^$PXE_ID$" | tr "\\n" "," | sed "s/,$//")
-  if [ -n "$REST" ]; then
-    efibootmgr -o "$PXE_ID,$REST" || true
-  else
-    efibootmgr -o "$PXE_ID" || true
+# 8. Restore UEFI Network/PXE boot priority so iPXE StateManager retains control on bare-metal (safe check)
+if command -v efibootmgr >/dev/null 2>&1; then
+  set +e
+  PXE_ID=$(efibootmgr 2>/dev/null | grep -Ei "IPv4|PXE|Network|Ethernet|IP4" | head -n 1 | sed -E "s/^Boot([0-9A-Fa-f]+).*/\\1/" || true)
+  CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep -i "^BootOrder:" | awk '{print $2}' || true)
+  if [ -n "$PXE_ID" ] && [ -n "$CURRENT_ORDER" ]; then
+    REST=$(echo "$CURRENT_ORDER" | tr "," "\\n" | grep -vi "^$PXE_ID$" | tr "\\n" "," | sed "s/,$//" || true)
+    if [ -n "$REST" ]; then
+      efibootmgr -o "$PXE_ID,$REST" 2>/dev/null || true
+    else
+      efibootmgr -o "$PXE_ID" 2>/dev/null || true
+    fi
   fi
+  set -e
 fi
 
 # 9. Notify Bun iPXE server of successful installation completion
-curl -s -X POST "${baseUrl}/api/installed?mac=${encodeURIComponent(
+curl -s --connect-timeout 5 --max-time 10 -X POST "${baseUrl}/api/installed?mac=${encodeURIComponent(
     host.mac
   )}&hostname=${encodeURIComponent(host.hostname)}&os=suse-micro" || true
 
