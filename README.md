@@ -322,6 +322,17 @@ docker compose logs -f
   ```bash
   curl -X POST "http://localhost:3000/api/installed?mac=bc:24:11:00:24:33&hostname=k3s-single-node&os=ubuntu"
   ```
+- **Lấy Kubeconfig của Node K3s / RKE2 (theo hostname hoặc MAC)**:
+  ```bash
+  # Tải file YAML về máy:
+  curl -s http://localhost:3000/api/kubeconfig/rke2-single-node-i5 > kubeconfig-rke2-single-node-i5
+  
+  # Hoặc pipe trực tiếp cho kubectl:
+  curl -s http://localhost:3000/api/kubeconfig/rke2-single-node-i5 | kubectl --kubeconfig=/dev/stdin get nodes
+
+  # Tra cứu theo MAC hoặc định dạng JSON:
+  curl -s "http://localhost:3000/api/kubeconfig/e8:9c:25:7b:af:d8?format=json"
+  ```
 
 ---
 

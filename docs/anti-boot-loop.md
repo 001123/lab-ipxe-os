@@ -170,7 +170,7 @@ chain --autofree http://192.168.250.202:3000/boot.ipxe?mac=${net0/mac}&force=tru
 ## 7. Khuyến Nghị Bảo Mật Cho Môi Trường Mạng (Security Hardening)
 
 1. **Giới hạn dải mạng truy cập API**:
-   - Endpoint `/api/installed` và `/api/reset` chỉ nên cho phép các IP thuộc mạng nội bộ Homelab/Data Center (`192.168.250.0/24`) truy cập. Không mở cổng 3000 ra Internet công cộng.
+   - Các Endpoint quản trị và bảo mật như `/api/installed`, `/api/reset`, và `/api/kubeconfig` chỉ nên cho phép các IP thuộc mạng nội bộ Homelab/Data Center (`192.168.250.0/24`) truy cập. Tuyệt đối không mở cổng 3000 ra Internet công cộng mà không có reverse proxy xác thực.
 2. **Khóa State bằng API Token (Khuyến nghị cho Enterprise)**:
    - Có thể bổ sung thêm biến môi trường `ADMIN_API_TOKEN` vào file `.env`.
    - Các lệnh `/api/reset` hoặc `/api/installed` bắt buộc phải kèm Header `Authorization: Bearer <TOKEN>` để ngăn chặn việc người dùng trái phép gửi request giả mạo địa chỉ MAC làm gián đoạn máy chủ.

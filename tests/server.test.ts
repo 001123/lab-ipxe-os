@@ -188,6 +188,34 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(script).toContain("systemctl enable rke2-server.service");
       expect(script).toContain("/api/installed");
     });
+
+    it("GET /api/kubeconfig without identifier should return 400 Bad Request", async () => {
+      const res = await fetch(`${baseUrl}/api/kubeconfig`);
+      expect(res.status).toBe(400);
+      const data = (await res.json()) as any;
+      expect(data.error).toContain("Missing node identifier");
+    });
+
+    it("GET /api/kubeconfig/unknown-node should return 404 Not Found", async () => {
+      const res = await fetch(`${baseUrl}/api/kubeconfig/unknown-node`);
+      expect(res.status).toBe(404);
+      const data = (await res.json()) as any;
+      expect(data.error).toContain("not found");
+    });
+
+    it("GET /api/kubeconfig for host with non-k8s profile should return 400 Bad Request", async () => {
+      const genericMac = "aa:bb:cc:11:22:33";
+      await fetch(`${baseUrl}/api/installed?mac=${genericMac}&hostname=generic-box&os=ubuntu`, {
+        method: "POST",
+      });
+
+      const res = await fetch(`${baseUrl}/api/kubeconfig/${genericMac}`);
+      expect(res.status).toBe(400);
+      const data = (await res.json()) as any;
+      expect(data.error).toContain("does not run a Kubernetes cluster");
+
+      await fetch(`${baseUrl}/api/reset?mac=${genericMac}`, { method: "POST" });
+    });
   });
 
   describe("Ubuntu Profiles", () => {

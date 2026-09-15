@@ -123,13 +123,21 @@ sequenceDiagram
     Bun-->>Node: Script: sanboot --no-describe --drive 0x80
     Node->>Node: Nhảy thẳng vào HĐH Ubuntu trên ổ cứng SSD
     Node->>Node: Systemd khởi chạy K3s Server -> Cluster READY!
+
+    Note over User,Bun: Chặng 7: Lấy Kubeconfig & Quản trị Cụm (Zero-Manual Fetch)
+    User->>Bun: HTTP GET /api/kubeconfig/k3s-single-node (hoặc theo MAC)
+    Bun->>Node: SSH cat /etc/rancher/k3s/k3s.yaml (Real-time, không cache)
+    Node-->>Bun: Kubeconfig gốc (server: 127.0.0.1:6443)
+    Bun->>Bun: Tự động đổi server URL thành IP ngoài (192.168.250.33:6443)
+    Bun-->>User: File kubeconfig YAML (hoặc JSON nếu ?format=json)
+    User->>Node: kubectl get nodes (kết nối trực tiếp cluster)
 ```
 
 ---
 
 ## 3. Các Chặng Chuyển Đổi Vòng Đời (Lifecycle Boot Phases)
 
-Hệ thống hoạt động mượt mà nhờ việc phân định ranh giới rõ ràng giữa 6 giai đoạn kế tiếp nhau:
+Hệ thống hoạt động mượt mà nhờ việc phân định ranh giới rõ ràng giữa 7 giai đoạn kế tiếp nhau:
 
 | Giai Đoạn | Thực Thể Chịu Trách Nhiệm | Nhiệm Vụ Cốt Lõi | Cơ Chế Bàn Giao (Handoff) |
 | :--- | :--- | :--- | :--- |
@@ -138,7 +146,8 @@ Hệ thống hoạt động mượt mà nhờ việc phân định ranh giới r
 | **Phase 3: Stage 2 HTTP** | Bun HTTP Server | Truy vấn MAC trong `hosts.yaml` & `state.json` để trả về iPXE script tương ứng. | Lệnh iPXE `kernel` và `initrd` nạp Linux. |
 | **Phase 4: Live OS Boot** | Linux Casper Environment | Mount hệ thống tệp gốc qua **NFS** hoặc nạp **ISO vào RAM**. | Khởi chạy tiến trình `subiquity` của Canonical. |
 | **Phase 5: Subiquity Engine** | Cloud-Init & Curtin | Đọc cấu hình từ `/os/ubuntu/:mac/user-data`, phân vùng ổ đĩa, chạy late-commands. | Gửi Webhook Phone-Home `/api/installed` rồi `reboot`. |
-| **Phase 6: Production Run** | Local Drive / K3s | iPXE nhận diện trạng thái đã cài -> thực thi `sanboot 0x80`. | Máy khởi động vào Ubuntu và K3s sẵn sàng phục vụ. |
+| **Phase 6: Production Run** | Local Drive / K3s / RKE2 | iPXE nhận diện trạng thái đã cài -> thực thi `sanboot 0x80`. | Máy khởi động vào OS trên SSD và cụm Kubernetes sẵn sàng. |
+| **Phase 7: Cluster Access** | Bun Kubeconfig API | Cung cấp endpoint `GET /api/kubeconfig/:identifier` SSH thời gian thực, tự đổi server IP. | Trả file YAML/JSON sẵn sàng cho `kubectl` kết nối từ xa. |
 
 ---
 

@@ -127,5 +127,190 @@ export async function handleApiRoute(
     });
   }
 
+  // GET /api/kubeconfig or /api/kubeconfig/:identifier
+  if (
+    (pathname === "/api/kubeconfig" || pathname.startsWith("/api/kubeconfig/")) &&
+    method === "GET"
+  ) {
+    let identifier = "";
+    if (pathname.startsWith("/api/kubeconfig/")) {
+      identifier = decodeURIComponent(pathname.slice("/api/kubeconfig/".length)).trim();
+    } else {
+      identifier = (
+        url.searchParams.get("id") ||
+        url.searchParams.get("identifier") ||
+        url.searchParams.get("hostname") ||
+        url.searchParams.get("mac") ||
+        ""
+      ).trim();
+    }
+
+    if (!identifier) {
+      return new Response(
+        JSON.stringify({
+          error: "Missing node identifier. Provide either /api/kubeconfig/:identifier or ?hostname=... / ?mac=...",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const hostsConfig = configMgr.loadHostsConfig();
+    const installed = stateMgr.getAllInstalled();
+
+    let targetMac: string | null = null;
+    let resolvedHost: any = null;
+
+    // 1. Try matching by MAC address
+    const normalizedInputMac = configMgr.normalizeMac(identifier);
+    if (hostsConfig.hosts && hostsConfig.hosts[normalizedInputMac]) {
+      targetMac = normalizedInputMac;
+      resolvedHost = configMgr.getHost(targetMac);
+    } else if (installed[normalizedInputMac]) {
+      targetMac = normalizedInputMac;
+      resolvedHost = configMgr.getHost(targetMac);
+    }
+
+    // 2. If not matched by MAC, search by hostname (case-insensitive)
+    if (!targetMac) {
+      const lowerId = identifier.toLowerCase();
+      if (hostsConfig.hosts) {
+        for (const rawMac of Object.keys(hostsConfig.hosts)) {
+          const cleanMac = configMgr.normalizeMac(rawMac);
+          const host = configMgr.getHost(cleanMac);
+          if (host.hostname?.toLowerCase() === lowerId) {
+            targetMac = cleanMac;
+            resolvedHost = host;
+            break;
+          }
+        }
+      }
+
+      if (!targetMac) {
+        for (const [rawMac, record] of Object.entries(installed)) {
+          const cleanMac = configMgr.normalizeMac(rawMac);
+          if (record.hostname?.toLowerCase() === lowerId) {
+            targetMac = cleanMac;
+            resolvedHost = configMgr.getHost(cleanMac);
+            break;
+          }
+        }
+      }
+    }
+
+    if (!targetMac || !resolvedHost) {
+      return new Response(
+        JSON.stringify({
+          error: `Node '${identifier}' not found in registered hosts or installed state.`,
+        }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3. Verify that the profile runs a Kubernetes cluster
+    const profile = (resolvedHost.profile || resolvedHost.role || "generic").toLowerCase();
+    let remotePath = "";
+
+    if (profile === "k3s-single-node" || profile.includes("k3s")) {
+      remotePath = "/etc/rancher/k3s/k3s.yaml";
+    } else if (profile === "rke2-single-node" || profile.includes("rke2")) {
+      remotePath = "/etc/rancher/rke2/rke2.yaml";
+    } else {
+      return new Response(
+        JSON.stringify({
+          error: `Host '${resolvedHost.hostname}' (profile: '${profile}') does not run a Kubernetes cluster (k3s or rke2).`,
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // 4. Resolve node IP and SSH user
+    const installedInfo = installed[targetMac];
+    const nodeIp = installedInfo?.client_ip || resolvedHost.network?.ip;
+
+    if (!nodeIp || nodeIp === "unknown") {
+      return new Response(
+        JSON.stringify({
+          error: `Could not determine reachable IP address for host '${resolvedHost.hostname}'.`,
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const sshUser = resolvedHost.user || hostsConfig.default?.user || "homelab";
+    const advertiseIp = url.searchParams.get("server_ip") || nodeIp;
+
+    // 5. Fetch kubeconfig via SSH directly without caching
+    try {
+      const proc = Bun.spawn(
+        [
+          "ssh",
+          "-o", "BatchMode=yes",
+          "-o", "StrictHostKeyChecking=no",
+          "-o", "ConnectTimeout=5",
+          `${sshUser}@${nodeIp}`,
+          `cat ${remotePath}`,
+        ],
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+        }
+      );
+
+      const exitCode = await proc.exited;
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+
+      if (exitCode !== 0) {
+        return new Response(
+          JSON.stringify({
+            error: `Failed to fetch kubeconfig from ${resolvedHost.hostname} (${nodeIp}) via SSH.`,
+            details: stderr.trim() || `ssh exited with code ${exitCode}`,
+          }),
+          { status: 502, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Replace 127.0.0.1:6443 with target server IP
+      const finalKubeconfig = stdout.replace(
+        /https:\/\/127\.0\.0\.1:6443/g,
+        `https://${advertiseIp}:6443`
+      );
+
+      const format = url.searchParams.get("format")?.toLowerCase();
+      if (format === "json") {
+        return new Response(
+          JSON.stringify(
+            {
+              success: true,
+              hostname: resolvedHost.hostname,
+              ip: nodeIp,
+              mac: targetMac,
+              profile,
+              kubeconfig: finalKubeconfig,
+            },
+            null,
+            2
+          ),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(finalKubeconfig, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/x-yaml; charset=utf-8",
+          "Content-Disposition": `attachment; filename="kubeconfig-${resolvedHost.hostname}"`,
+        },
+      });
+    } catch (err: any) {
+      return new Response(
+        JSON.stringify({
+          error: `Unexpected error connecting to ${resolvedHost.hostname}: ${err.message}`,
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
+
   return new Response("Not Found", { status: 404 });
 }

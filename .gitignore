@@ -7,6 +7,10 @@ bun.lock
 .env
 .env.local
 proxmox/credentials.env
+kubeconfig
+kubeconfig/
+kubeconfig*
+*.kubeconfig
 
 # Dynamic Data & State
 data/state.json

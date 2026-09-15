@@ -73,6 +73,7 @@ Useful Endpoints:
 - Asset Mirror:       ${configMgr.appConfig.baseUrl}/assets/
 - Host API:           ${configMgr.appConfig.baseUrl}/api/hosts
 - Phone-Home Webhook: ${configMgr.appConfig.baseUrl}/api/installed?mac=<MAC>
+- Kubeconfig API:     ${configMgr.appConfig.baseUrl}/api/kubeconfig/<hostname|MAC>
 `,
         {
           status: 200,

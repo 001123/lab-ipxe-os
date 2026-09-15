@@ -219,6 +219,20 @@ Sau khi máy đã hoàn tất cài đặt và khởi động lại vào Ubuntu:
     sudo chmod 644 /etc/rancher/k3s/k3s.yaml
     ```
 
+### 5.3. Cách lấy file kubeconfig an toàn từ xa qua API Server
+Không cần SSH thủ công và copy/paste file cấu hình rồi sửa địa chỉ IP bằng tay, bạn có thể gọi thẳng endpoint API của Bun server:
+```bash
+# Tải về file kubeconfig (tự động đổi IP server về IP node)
+curl -s http://<BUN_IP>:3000/api/kubeconfig/<hostname-hoặc-mac> > kubeconfig-<hostname>
+
+# Thực thi lệnh kubectl trực tiếp không cần lưu file:
+curl -s http://<BUN_IP>:3000/api/kubeconfig/<hostname-hoặc-mac> | kubectl --kubeconfig=/dev/stdin get nodes -o wide
+```
+- **Lưu ý mã lỗi HTTP**:
+  - `400 Bad Request`: Thiếu định danh node hoặc node cấu hình profile không chạy cụm Kubernetes (ví dụ profile `generic`).
+  - `404 Not Found`: Không tìm thấy node trong `config/hosts.yaml` lẫn `data/state.json`.
+  - `502 Bad Gateway`: Node chưa hoàn thành cài đặt, SSH daemon chưa mở hoặc Kubernetes chưa kịp sinh file config.
+
 ---
 
 ## 6. Tầng 6: Sự Cố Tự Động Hóa Proxmox VE (`proxmox/create-vm.ts`)
