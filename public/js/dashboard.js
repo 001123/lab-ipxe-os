@@ -120,6 +120,121 @@
     }
   };
 
+  // --- Import YAML Handlers ---
+  window.handleYamlFileSelect = function (input) {
+    const file = input.files && input.files[0];
+    const nameSpan = document.getElementById('import-yaml-filename');
+    const previewBox = document.getElementById('import-yaml-preview');
+    const countBadge = document.getElementById('import-node-count-badge');
+    const previewList = document.getElementById('import-preview-list');
+
+    if (!file) {
+      if (nameSpan) nameSpan.textContent = 'No file selected';
+      if (previewBox) previewBox.classList.add('is-hidden');
+      return;
+    }
+
+    if (nameSpan) nameSpan.textContent = file.name;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const text = e.target.result;
+      const lines = text.split('\n');
+      const detectedHosts = [];
+      let inHosts = false;
+      let hasDefault = false;
+
+      for (const line of lines) {
+        if (/^default\s*:/i.test(line)) {
+          hasDefault = true;
+          inHosts = false;
+        } else if (/^hosts\s*:/i.test(line)) {
+          inHosts = true;
+        } else if (inHosts) {
+          const macMatch = line.match(/^\s{1,4}([0-9a-fA-F:.-]{11,20})\s*:/);
+          if (macMatch) {
+            detectedHosts.push(macMatch[1]);
+          } else if (/^\S/.test(line)) {
+            inHosts = false;
+          }
+        }
+      }
+
+      if (previewBox && countBadge && previewList) {
+        previewBox.classList.remove('is-hidden');
+        countBadge.textContent = `${detectedHosts.length} node(s) found`;
+        let html = '';
+        if (hasDefault) {
+          html += '<div class="has-text-success mb-1">✔ Contains global default configuration (<code>default:</code>)</div>';
+        }
+        if (detectedHosts.length > 0) {
+          html += '<div class="has-text-grey-light mb-1">Detected MACs:</div>';
+          html += '<ul style="padding-left: 1rem; list-style-type: disc;">';
+          detectedHosts.slice(0, 10).forEach((mac) => {
+            html += `<li><code>${mac}</code></li>`;
+          });
+          if (detectedHosts.length > 10) {
+            html += `<li>… and ${detectedHosts.length - 10} more node(s)</li>`;
+          }
+          html += '</ul>';
+        } else {
+          html += '<div class="has-text-warning">No host entries found under `hosts:` block.</div>';
+        }
+        previewList.innerHTML = html;
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  window.submitImportYamlForm = async function (e) {
+    e.preventDefault();
+    const form = document.getElementById('import-yaml-form');
+    const submitBtn = document.getElementById('import-submit-btn');
+    const replaceAllCheckbox = document.getElementById('import-replace-all');
+
+    if (replaceAllCheckbox && replaceAllCheckbox.checked) {
+      const confirmed = confirm(
+        'CẢNH BÁO: Tùy chọn "Replace All" sẽ XÓA SẠCH toàn bộ node trong cơ sở dữ liệu trước khi nạp file YAML.\n\nBạn có chắc chắn muốn tiếp tục?'
+      );
+      if (!confirmed) return;
+    }
+
+    if (submitBtn) submitBtn.classList.add('is-loading');
+
+    try {
+      const formData = new FormData(form);
+      const res = await fetch('/api/import/yaml', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        window.closeModal('import-yaml-modal');
+        form.reset();
+        const previewBox = document.getElementById('import-yaml-preview');
+        const nameSpan = document.getElementById('import-yaml-filename');
+        if (previewBox) previewBox.classList.add('is-hidden');
+        if (nameSpan) nameSpan.textContent = 'No file selected';
+
+        alert(data.message || 'Import YAML thành công!');
+
+        // Refresh table using HTMX or reload
+        if (window.htmx) {
+          window.htmx.ajax('GET', '/ui/nodes-table', { target: '#nodes-table-body', swap: 'innerHTML' });
+        } else {
+          window.location.reload();
+        }
+      } else {
+        alert(`Lỗi Import YAML: ${data.error || res.statusText || 'Không rõ nguyên nhân'}`);
+      }
+    } catch (err) {
+      alert(`Lỗi kết nối khi import YAML: ${err.message}`);
+    } finally {
+      if (submitBtn) submitBtn.classList.remove('is-loading');
+    }
+  };
+
   // Close modals on Escape key
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {

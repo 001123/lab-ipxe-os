@@ -95,3 +95,19 @@ export interface OSProvider {
   renderIpxe(ctx: BootContext): string;
   handleConfig(subpath: string, req: Request, ctx: HostContext): Promise<Response> | Response;
 }
+
+export interface ImportYamlOptions {
+  replaceAll?: boolean;
+  updateDefaults?: boolean;
+  resetStatus?: boolean;
+}
+
+export interface ImportYamlResult {
+  success: boolean;
+  added: number;
+  updated: number;
+  total: number;
+  message: string;
+  errors?: string[];
+}
+

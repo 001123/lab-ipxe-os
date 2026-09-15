@@ -405,6 +405,79 @@ export async function handleApiRoute(
   }
 
   // =========================================================================
+  // 2.1 Import YAML to Database (/api/import/yaml)
+  // =========================================================================
+  if (pathname === "/api/import/yaml" && method === "POST") {
+    try {
+      const contentType = req.headers.get("content-type") || "";
+      let yamlContent = "";
+      let replaceAll = false;
+      let updateDefaults = true;
+      let resetStatus = false;
+
+      if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+        const formData = await req.formData();
+        const file = formData.get("file");
+        if (file && typeof file === "object" && "text" in file) {
+          yamlContent = await (file as Blob).text();
+        } else if (typeof file === "string") {
+          yamlContent = file;
+        } else {
+          const yamlField = formData.get("yaml");
+          if (typeof yamlField === "string") {
+            yamlContent = yamlField;
+          }
+        }
+
+        replaceAll = formData.get("replaceAll") === "true" || formData.get("replaceAll") === "1";
+        updateDefaults = formData.has("updateDefaults")
+          ? formData.get("updateDefaults") === "true" || formData.get("updateDefaults") === "1"
+          : true;
+        resetStatus = formData.get("resetStatus") === "true" || formData.get("resetStatus") === "1";
+      } else if (contentType.includes("application/json")) {
+        const body = await req.json().catch(() => ({}));
+        yamlContent = body.yaml || body.content || "";
+        if (body.replaceAll !== undefined) replaceAll = Boolean(body.replaceAll);
+        if (body.updateDefaults !== undefined) updateDefaults = Boolean(body.updateDefaults);
+        if (body.resetStatus !== undefined) resetStatus = Boolean(body.resetStatus);
+      } else {
+        // Raw text / yaml payload
+        yamlContent = await req.text();
+        replaceAll = url.searchParams.get("replaceAll") === "true";
+        updateDefaults = url.searchParams.has("updateDefaults")
+          ? url.searchParams.get("updateDefaults") === "true"
+          : true;
+        resetStatus = url.searchParams.get("resetStatus") === "true";
+      }
+
+      if (!yamlContent || !yamlContent.trim()) {
+        return new Response(JSON.stringify({ error: "Nội dung file YAML rỗng hoặc không hợp lệ." }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const result = stateMgr.importFromYaml(yamlContent, {
+        replaceAll,
+        updateDefaults,
+        resetStatus,
+      });
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (err: any) {
+      return new Response(
+        JSON.stringify({
+          error: err.message || "Failed to import YAML",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
+
+  // =========================================================================
   // 3. Status & Reset Endpoints
   // =========================================================================
 

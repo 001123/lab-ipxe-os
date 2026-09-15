@@ -11,6 +11,8 @@ import type {
   HostEntity,
   DefaultHostConfig,
   HostsFileStructure,
+  ImportYamlOptions,
+  ImportYamlResult,
 } from "../types.ts";
 
 export class StateManager {
@@ -36,11 +38,20 @@ export class StateManager {
   }
 
   public normalizeMac(mac: string): string {
-    return (mac || "")
+    const raw = (mac || "")
       .trim()
       .toLowerCase()
-      .replace(/[-]/g, ":")
       .replace(/^0x/, "");
+    const cleanHex = raw.replace(/[^0-9a-f]/g, "");
+    if (cleanHex.length === 12) {
+      return cleanHex.match(/.{2}/g)!.join(":");
+    }
+    return raw.replace(/[-]/g, ":");
+  }
+
+  public isValidMac(mac: string): boolean {
+    const clean = this.normalizeMac(mac);
+    return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(clean);
   }
 
   private initDb(): void {
@@ -581,6 +592,125 @@ export class StateManager {
     };
 
     return YAML.stringify(doc);
+  }
+
+  public importFromYaml(
+    yamlContent: string,
+    options: ImportYamlOptions = {}
+  ): ImportYamlResult {
+    const {
+      replaceAll = false,
+      updateDefaults = true,
+      resetStatus = false,
+    } = options;
+
+    let parsed: HostsFileStructure;
+    try {
+      parsed = YAML.parse(yamlContent);
+    } catch (err: any) {
+      throw new Error(`YAML syntax error: ${err.message || String(err)}`);
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Invalid YAML document: root element must be an object.");
+    }
+
+    const rawHosts = parsed.hosts;
+    if (!rawHosts || typeof rawHosts !== "object") {
+      throw new Error("Invalid YAML document: missing or invalid 'hosts' map.");
+    }
+
+    const hostEntries = Object.entries(rawHosts);
+    if (hostEntries.length === 0 && !parsed.default) {
+      throw new Error("YAML file contains no hosts and no default configuration.");
+    }
+
+    // Pre-validate all MAC addresses before starting transaction
+    const validatedHosts: Array<{ cleanMac: string; spec: any }> = [];
+    for (const [rawMac, spec] of hostEntries) {
+      const cleanMac = this.normalizeMac(rawMac);
+      if (!this.isValidMac(cleanMac)) {
+        throw new Error(
+          `Invalid MAC address format: "${rawMac}". Must be 6 pairs of hexadecimal digits (e.g., 00:11:22:33:44:55).`
+        );
+      }
+      if (!spec || typeof spec !== "object") {
+        throw new Error(`Invalid host configuration for MAC ${rawMac}: entry must be an object.`);
+      }
+      validatedHosts.push({ cleanMac, spec });
+    }
+
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    // Run atomically inside SQLite transaction
+    const runTransaction = this.db.transaction(() => {
+      // 1. If replaceAll, delete all existing hosts
+      if (replaceAll) {
+        this.db.prepare("DELETE FROM hosts").run();
+      }
+
+      // 2. If updateDefaults is enabled and parsed.default is provided, update global_config
+      if (updateDefaults && parsed.default && typeof parsed.default === "object") {
+        this.saveGlobalDefaultConfig(parsed.default);
+      }
+
+      const activeDefaults = this.getGlobalDefaultConfig();
+
+      // 3. Process validated hosts
+      for (const { cleanMac, spec } of validatedHosts) {
+        const existingHost = this.getHost(cleanMac, false);
+
+        let status: NodeStatus = "PENDING";
+        let installedAt: string | undefined = undefined;
+
+        if (resetStatus) {
+          status = "PENDING";
+          installedAt = undefined;
+        } else if (existingHost) {
+          status = existingHost.status || "PENDING";
+          installedAt = existingHost.installed_at;
+        }
+
+        if (existingHost && !replaceAll) {
+          updatedCount++;
+        } else {
+          addedCount++;
+        }
+
+        const hostToSave: HostConfig = {
+          mac: cleanMac,
+          hostname: spec.hostname || (existingHost ? existingHost.hostname : `homelab-${cleanMac.replace(/:/g, "").slice(-6)}`),
+          os: spec.os || activeDefaults.os || "ubuntu",
+          version: spec.version !== undefined ? spec.version : (activeDefaults.version || existingHost?.version),
+          profile: spec.profile !== undefined ? spec.profile : (activeDefaults.profile || existingHost?.profile || "generic"),
+          role: spec.role !== undefined ? spec.role : (activeDefaults.role || existingHost?.role),
+          user: spec.user !== undefined ? spec.user : (activeDefaults.user || existingHost?.user),
+          password_hash: spec.password_hash !== undefined ? spec.password_hash : (activeDefaults.password_hash || existingHost?.password_hash),
+          ssh_authorized_keys: spec.ssh_authorized_keys || activeDefaults.ssh_authorized_keys || existingHost?.ssh_authorized_keys,
+          storage: { ...activeDefaults.storage, ...existingHost?.storage, ...spec.storage },
+          network: { ...activeDefaults.network, ...existingHost?.network, ...spec.network },
+          extra_packages: spec.extra_packages || activeDefaults.extra_packages || existingHost?.extra_packages,
+          force_install: spec.force_install !== undefined ? Boolean(spec.force_install) : (existingHost?.force_install ?? false),
+          note: spec.note !== undefined ? spec.note : (existingHost?.note || activeDefaults.note),
+          custom: { ...activeDefaults.custom, ...existingHost?.custom, ...spec.custom },
+          status,
+          installed_at: installedAt,
+        };
+
+        this.createHostInternal(hostToSave);
+      }
+    });
+
+    runTransaction();
+
+    return {
+      success: true,
+      added: addedCount,
+      updated: updatedCount,
+      total: validatedHosts.length,
+      message: `Successfully imported ${validatedHosts.length} hosts (${addedCount} added, ${updatedCount} updated).`,
+    };
   }
 
   // --- Backwards Compatibility Helpers ---

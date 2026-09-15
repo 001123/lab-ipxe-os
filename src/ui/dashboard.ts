@@ -323,6 +323,19 @@ export function renderDashboardHtml(context: {
             <span>Export YAML</span>
           </a>
 
+          <button
+            class="button is-light is-small"
+            onclick="openModal('import-yaml-modal')"
+            title="Import nodes from hosts.yaml backup"
+          >
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Import YAML</span>
+          </button>
+
           <label class="checkbox is-size-7 is-flex is-align-items-center" style="gap: 0.35rem;" title="Auto-refresh table every 3 seconds">
             <input
               type="checkbox"
@@ -629,6 +642,91 @@ export function renderDashboardHtml(context: {
         <footer class="modal-card-foot is-justify-content-flex-end">
           <button class="button is-small" type="button" onclick="closeModal('edit-node-modal')">Cancel</button>
           <button class="button is-link is-small" type="submit">Save Changes</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- Import YAML Modal -->
+  <!-- ===================================================================== -->
+  <div id="import-yaml-modal" class="modal">
+    <div class="modal-background" onclick="closeModal('import-yaml-modal')"></div>
+    <div class="modal-card" style="max-width: 580px; width: 100%;">
+      <header class="modal-card-head">
+        <p class="modal-card-title is-size-5 mb-0">Import Configuration from YAML</p>
+        <button class="delete" aria-label="close" type="button" onclick="closeModal('import-yaml-modal')"></button>
+      </header>
+      <form id="import-yaml-form" onsubmit="submitImportYamlForm(event)">
+        <section class="modal-card-body">
+          <p class="is-size-7 has-text-grey mb-4">
+            Upload a previously exported <code>hosts.yaml</code> or backup file. Nodes will be imported into the SQLite database.
+          </p>
+
+          <!-- File Upload Zone -->
+          <div class="field mb-4">
+            <label class="label is-small">YAML Backup File <span class="has-text-danger">*</span></label>
+            <div class="file has-name is-small is-fullwidth">
+              <label class="file-label">
+                <input
+                  class="file-input"
+                  type="file"
+                  id="import-yaml-file"
+                  name="file"
+                  accept=".yaml,.yml"
+                  required
+                  onchange="handleYamlFileSelect(this)"
+                >
+                <span class="file-cta">
+                  <span class="file-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                  </span>
+                  <span class="file-label">Choose file…</span>
+                </span>
+                <span class="file-name" id="import-yaml-filename">No file selected</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- File Preview Details -->
+          <div id="import-yaml-preview" class="box p-3 mb-4 is-hidden has-background-dark-ter" style="border: 1px solid var(--bulma-border-weak, rgba(255,255,255,0.1));">
+            <div class="is-flex is-justify-content-space-between is-align-items-center mb-2">
+              <span class="is-size-7 has-text-weight-bold">File Content Summary</span>
+              <span id="import-node-count-badge" class="tag is-info is-small">0 nodes found</span>
+            </div>
+            <div id="import-preview-list" class="is-size-7 font-mono" style="max-height: 120px; overflow-y: auto;">
+            </div>
+          </div>
+
+          <!-- Import Options -->
+          <div class="box p-3 has-background-dark-ter" style="border: 1px solid var(--bulma-border-weak, rgba(255,255,255,0.1));">
+            <p class="is-size-7 has-text-weight-bold mb-2">Import Options</p>
+            
+            <label class="checkbox is-size-7 is-flex is-align-items-center mb-2" style="gap: 0.4rem;">
+              <input type="checkbox" id="import-update-defaults" name="updateDefaults" value="true" checked>
+              <span>Update Global Defaults from file (<code>default:</code> section)</span>
+            </label>
+
+            <label class="checkbox is-size-7 is-flex is-align-items-center mb-2" style="gap: 0.4rem;">
+              <input type="checkbox" id="import-reset-status" name="resetStatus" value="true">
+              <span>Reset node statuses to <strong>PENDING</strong> (ready for reinstall)</span>
+            </label>
+
+            <label class="checkbox is-size-7 is-flex is-align-items-center" style="gap: 0.4rem;">
+              <input type="checkbox" id="import-replace-all" name="replaceAll" value="true">
+              <span class="has-text-danger">Replace All: Clear entire database before importing</span>
+            </label>
+          </div>
+        </section>
+        <footer class="modal-card-foot is-justify-content-flex-end">
+          <button class="button is-small" type="button" onclick="closeModal('import-yaml-modal')">Cancel</button>
+          <button id="import-submit-btn" class="button is-primary is-small" type="submit">
+            <span>Import YAML</span>
+          </button>
         </footer>
       </form>
     </div>
