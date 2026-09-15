@@ -1,0 +1,156 @@
+/**
+ * iPXE Autoinstall Hub - Dashboard Custom CSS
+ * Extends Bulma CSS v1.0.4 (https://bulma.io/documentation/start/overview/)
+ */
+
+:root {
+  --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Brand logo styling */
+.brand-logo-box {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  margin-right: 0.75rem;
+}
+
+.brand-logo-box svg {
+  width: 22px;
+  height: 22px;
+  stroke: #ffffff;
+}
+
+/* Typography utilities */
+.font-mono {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+/* Status Indicators */
+.status-badge-wrapper {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+  margin-right: 0.4rem;
+  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+
+.icon-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+/* OS & Profile tags */
+.tag-suse {
+  background-color: rgba(48, 186, 120, 0.15);
+  color: #30ba78;
+  border: 1px solid rgba(48, 186, 120, 0.3);
+}
+
+.tag-ubuntu {
+  background-color: rgba(233, 84, 32, 0.15);
+  color: #e95420;
+  border: 1px solid rgba(233, 84, 32, 0.3);
+}
+
+/* Host Row Styles */
+.host-row td {
+  vertical-align: middle;
+}
+
+.hostname-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.host-note {
+  font-size: 0.78rem;
+  color: var(--bulma-text-weak, #7a7a7a);
+  margin-top: 0.15rem;
+}
+
+.mac-subtext {
+  font-size: 0.78rem;
+  color: var(--bulma-text-weak, #7a7a7a);
+}
+
+.date-subtext {
+  font-size: 0.72rem;
+  color: var(--bulma-text-weak, #7a7a7a);
+}
+
+/* Action button wrappers */
+.actions-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.btn-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 0.3rem;
+  vertical-align: -2px;
+}
+
+/* Stat Box Enhancements */
+.stat-box {
+  padding: 1.25rem;
+  border-radius: 8px;
+}
+
+.stat-box .heading {
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.stat-box .title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0;
+}
+
+/* Quick code snippet box */
+.quick-code-box {
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  overflow-x: auto;
+}

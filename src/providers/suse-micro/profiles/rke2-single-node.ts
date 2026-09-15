@@ -123,6 +123,11 @@ ${versionEntry}  valuesContent: |-
     configs:
       params:
         server.insecure: true
+      cm:
+        resource.customizations.health.networking.k8s.io_Ingress: |-
+          hs = {}
+          hs.status = "Healthy"
+          return hs
     server:
       ingress:
         enabled: true

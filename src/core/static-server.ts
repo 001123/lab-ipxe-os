@@ -1,16 +1,44 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve, normalize, join } from "node:path";
 
+const MIME_TYPES: Record<string, string> = {
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+};
+
 export class StaticAssetServer {
   private baseDir: string;
+  private routePrefix: string;
 
-  constructor(baseDir: string = join(process.cwd(), "assets")) {
+  constructor(
+    baseDir: string = join(process.cwd(), "assets"),
+    routePrefix: string = "assets"
+  ) {
     this.baseDir = resolve(baseDir);
+    this.routePrefix = routePrefix.replace(/^\/+|\/+$/g, "");
+  }
+
+  private getContentType(filePath: string, defaultType: string | null): string {
+    const extMatch = filePath.match(/\.[a-zA-Z0-9]+$/);
+    const ext = extMatch ? extMatch[0].toLowerCase() : "";
+    if (MIME_TYPES[ext]) {
+      return MIME_TYPES[ext];
+    }
+    return defaultType || "application/octet-stream";
   }
 
   public async serve(req: Request, urlPath: string): Promise<Response> {
-    // Strip leading /assets/
-    const subpath = urlPath.replace(/^\/?assets\/?/, "");
+    // Strip leading /<routePrefix>/
+    const prefixRegex = new RegExp(`^\\/?${this.routePrefix}\\/?`);
+    const subpath = urlPath.replace(prefixRegex, "");
     const safePath = normalize(join(this.baseDir, subpath));
 
     // Path traversal check
@@ -28,6 +56,7 @@ export class StaticAssetServer {
     }
 
     const file = Bun.file(safePath);
+    const contentType = this.getContentType(safePath, file.type);
     const rangeHeader = req.headers.get("range");
 
     // Bun natively handles Range headers when passed directly to Response,
@@ -53,7 +82,7 @@ export class StaticAssetServer {
           "Content-Range": `bytes ${start}-${end}/${stat.size}`,
           "Accept-Ranges": "bytes",
           "Content-Length": chunkLength.toString(),
-          "Content-Type": file.type || "application/octet-stream",
+          "Content-Type": contentType,
         },
       });
     }
@@ -63,7 +92,7 @@ export class StaticAssetServer {
       headers: {
         "Content-Length": stat.size.toString(),
         "Accept-Ranges": "bytes",
-        "Content-Type": file.type || "application/octet-stream",
+        "Content-Type": contentType,
       },
     });
   }

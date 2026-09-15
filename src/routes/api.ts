@@ -1,5 +1,80 @@
 import type { ConfigManager } from "../config.ts";
 import type { StateManager } from "../core/state.ts";
+import {
+  renderNodeRow,
+  renderNodesTablePartial,
+  type DashboardHostItem,
+} from "../ui/dashboard.ts";
+
+export function buildDashboardData(configMgr: ConfigManager, stateMgr: StateManager) {
+  const hostsConfig = configMgr.loadHostsConfig();
+  const allNodes = stateMgr.getAllNodes();
+  const nodeMap = new Map(allNodes.map((n) => [configMgr.normalizeMac(n.mac), n]));
+
+  const hosts: DashboardHostItem[] = [];
+  const processedMacs = new Set<string>();
+
+  if (hostsConfig.hosts) {
+    for (const [rawMac, spec] of Object.entries(hostsConfig.hosts)) {
+      const cleanMac = configMgr.normalizeMac(rawMac);
+      processedMacs.add(cleanMac);
+      const resolved = configMgr.getHost(cleanMac);
+      const nodeRec = nodeMap.get(cleanMac);
+
+      const status = nodeRec?.status || "PENDING";
+      hosts.push({
+        mac: cleanMac,
+        hostname: resolved.hostname,
+        ip: resolved.network?.ip || nodeRec?.ip,
+        os: resolved.os,
+        version: resolved.version,
+        profile: resolved.profile || resolved.role,
+        status,
+        note: resolved.note || nodeRec?.note,
+        installed_at: nodeRec?.installed_at,
+        updated_at: nodeRec?.updated_at,
+        isK8s: Boolean(
+          resolved.profile?.includes("k3s") ||
+          resolved.profile?.includes("rke2") ||
+          resolved.profile?.includes("k8s")
+        ),
+      });
+    }
+  }
+
+  // Also include nodes recorded in DB that are not explicitly in hosts.yaml
+  for (const node of allNodes) {
+    const cleanMac = configMgr.normalizeMac(node.mac);
+    if (!processedMacs.has(cleanMac)) {
+      hosts.push({
+        mac: cleanMac,
+        hostname: node.hostname || "unconfigured",
+        ip: node.ip,
+        os: node.os || "unknown",
+        status: node.status,
+        note: node.note,
+        installed_at: node.installed_at,
+        updated_at: node.updated_at,
+      });
+    }
+  }
+
+  const installedCount = hosts.filter((h) => h.status === "INSTALLED").length;
+  const provisioningCount = hosts.filter((h) => h.status === "PROVISIONING").length;
+  const pendingCount = hosts.filter((h) => h.status === "PENDING").length;
+
+  return {
+    hosts,
+    baseUrl: configMgr.appConfig.baseUrl,
+    appConfig: configMgr.appConfig,
+    stats: {
+      total: hosts.length,
+      installed: installedCount,
+      provisioning: provisioningCount,
+      pending: pendingCount,
+    },
+  };
+}
 
 export async function handleApiRoute(
   req: Request,
@@ -171,12 +246,125 @@ export async function handleApiRoute(
     const cleanMac = configMgr.normalizeMac(mac);
     const reset = stateMgr.resetInstalled(cleanMac);
 
+    // If request comes from HTMX, return the updated HTML row partial
+    if (req.headers.get("hx-request") === "true" || req.headers.get("HX-Request") === "true") {
+      const host = configMgr.getHost(cleanMac);
+      const record = stateMgr.getNodeRecord(cleanMac);
+      const updatedHost: DashboardHostItem = {
+        mac: cleanMac,
+        hostname: host.hostname,
+        ip: host.network?.ip || record?.ip,
+        os: host.os,
+        version: host.version,
+        profile: host.profile || host.role,
+        status: (record?.status || "PENDING") as any,
+        note: host.note || record?.note,
+        installed_at: record?.installed_at,
+        updated_at: record?.updated_at,
+        isK8s: Boolean(
+          host.profile?.includes("k3s") ||
+          host.profile?.includes("rke2") ||
+          host.profile?.includes("k8s")
+        ),
+      };
+      const html = renderNodeRow(updatedHost, configMgr.appConfig.baseUrl);
+      return new Response(html, {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+
     return new Response(
       JSON.stringify({
         success: reset,
         message: reset
           ? `Lock cleared for ${cleanMac}. Ready for reinstall.`
           : `Host ${cleanMac} was not in installed state.`,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // GET /ui/nodes-table (HTMX partial update)
+  if (pathname === "/ui/nodes-table" && method === "GET") {
+    const data = buildDashboardData(configMgr, stateMgr);
+    const html = renderNodesTablePartial(data.hosts, configMgr.appConfig.baseUrl);
+    return new Response(html, {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
+
+  // GET /api/nodes (Full SQLite node records)
+  if (pathname === "/api/nodes" && method === "GET") {
+    return new Response(JSON.stringify(stateMgr.getAllNodes(), null, 2), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // DELETE /api/nodes?mac=... (Delete node record from SQLite)
+  if (pathname === "/api/nodes" && method === "DELETE") {
+    let mac = url.searchParams.get("mac");
+    if (!mac && req.headers.get("content-type")?.includes("application/json")) {
+      try {
+        const body = (await req.json()) as any;
+        mac = body?.mac;
+      } catch {}
+    }
+
+    if (!mac) {
+      return new Response(JSON.stringify({ error: "Missing required query parameter: 'mac'" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const cleanMac = configMgr.normalizeMac(mac);
+    const deleted = stateMgr.deleteNode(cleanMac);
+
+    if (req.headers.get("hx-request") === "true" || req.headers.get("HX-Request") === "true") {
+      const hostsConfig = configMgr.loadHostsConfig();
+      const isConfiguredHost = Boolean(hostsConfig.hosts && hostsConfig.hosts[cleanMac]);
+
+      if (isConfiguredHost) {
+        // Since node is declared in hosts.yaml, reset row back to clean PENDING state
+        const host = configMgr.getHost(cleanMac);
+        const pendingHost: DashboardHostItem = {
+          mac: cleanMac,
+          hostname: host.hostname,
+          ip: host.network?.ip,
+          os: host.os,
+          version: host.version,
+          profile: host.profile || host.role,
+          status: "PENDING",
+          note: host.note,
+          isK8s: Boolean(
+            host.profile?.includes("k3s") ||
+            host.profile?.includes("rke2") ||
+            host.profile?.includes("k8s")
+          ),
+        };
+        const html = renderNodeRow(pendingHost, configMgr.appConfig.baseUrl);
+        return new Response(html, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      } else {
+        // Dynamic node not declared in hosts.yaml: return empty string so HTMX deletes the row
+        return new Response("", {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: deleted,
+        message: deleted
+          ? `Node ${cleanMac} deleted from state.`
+          : `Node ${cleanMac} was not found in state.`,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );

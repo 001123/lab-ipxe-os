@@ -323,8 +323,24 @@ docker compose logs -f
 
 ---
 
-## 9. API Quản Trị & Phone-Home Webhook
+## 9. Web UI Dashboard & API Quản Trị
 
+### 9.1. Web UI Dashboard (Bulma CSS & HTMX v4)
+Mở trực tiếp trên trình duyệt tại:
+```
+http://localhost:3000/
+```
+- **Bulma CSS v1.0**: Thiết kế giao diện hiện đại theo chuẩn [Bulma CSS v1.0.4 Overview](https://bulma.io/documentation/start/overview/), hỗ trợ tự động Dark/Light theme theo hệ thống kèm nút toggle trên Navbar.
+- **Nâng cấp HTMX v4**: Hệ thống đã nâng cấp từ HTMX v2 (`2.0.4`) lên HTMX v4 (`4.0.0`). Tham khảo tài liệu và hướng dẫn tại [four.htmx.org/docs](https://four.htmx.org/docs).
+- **Kiến trúc file tĩnh `public/`**: Toàn bộ script và style tùy biến được tách sạch sẽ khỏi template HTML và lưu trong thư mục `public/` (phục vụ qua endpoint `/public/*`):
+  - `public/js/dashboard.js`: Xử lý auto-polling 3s và điều khiển Dark/Light mode.
+  - `public/css/dashboard.css`: Animation pulse dot và các tùy biến giao diện.
+- **Live Status Monitoring**: Hiển thị bảng toàn bộ node với trạng thái thời gian thực (`PENDING`, `PROVISIONING`, `INSTALLED`, `FAILED`).
+- **Nút Reset 1-Click**: Xóa khóa trạng thái trực tiếp trên UI qua HTMX partial update.
+- **Nút Tải Kubeconfig**: Tải file kubeconfig ngay lập tức cho các node K3s/RKE2 đã hoàn tất cài đặt.
+- **Toggle Auto-polling**: Tùy chọn bật/tắt tự động làm mới trạng thái mỗi 3 giây.
+
+### 9.2. API Quản Trị & Phone-Home Webhook
 - **Kiểm tra trạng thái server**:
   ```bash
   curl http://localhost:3000/health
@@ -333,7 +349,11 @@ docker compose logs -f
   ```bash
   curl http://localhost:3000/api/hosts
   ```
-- **Xem dữ liệu trạng thái (`data/state.json`)**:
+- **Xem chi tiết bản ghi nodes từ SQLite (`data/state.db`)**:
+  ```bash
+  curl http://localhost:3000/api/nodes
+  ```
+- **Xem dữ liệu trạng thái tương thích (`/api/state`)**:
   ```bash
   curl http://localhost:3000/api/state
   ```
@@ -341,13 +361,13 @@ docker compose logs -f
   ```bash
   curl -X POST "http://localhost:3000/api/reset?mac=bc:24:11:00:24:33"
   ```
-- **Cập nhật ghi chú cho node (Lưu vào `data/state.json`)**:
+- **Cập nhật ghi chú cho node (Lưu vào SQLite `data/state.db`)**:
   ```bash
   curl -X POST "http://localhost:3000/api/note" \
     -H "Content-Type: application/json" \
     -d '{"mac": "bc:24:11:00:24:33", "note": "Node master K3s phòng lab"}'
   ```
-- **Webhook Phone-Home** (Cloud-Init gọi khi hoàn thành cài đặt, tự động kế thừa `note` từ `hosts.yaml`):
+- **Webhook Phone-Home** (Cloud-Init / Combustion gọi khi hoàn thành cài đặt, tự động kế thừa `note` từ `hosts.yaml`):
   ```bash
   curl -X POST "http://localhost:3000/api/installed?mac=bc:24:11:00:24:33&hostname=k3s-single-node&os=ubuntu"
   ```

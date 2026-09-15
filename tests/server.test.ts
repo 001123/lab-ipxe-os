@@ -293,6 +293,141 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
         body: JSON.stringify({ mac: testMac, note: originalNote }),
       });
     });
+
+    it("GET / with Accept: text/html should return Bulma & HTMX v4 Web UI Dashboard", async () => {
+      const res = await fetch(`${baseUrl}/`, {
+        headers: { Accept: "text/html" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      const html = await res.text();
+      expect(html).toContain("iPXE Autoinstall Hub");
+      expect(html).toContain("bulma@1.0.4");
+      expect(html).toContain("htmx.org@4.0.0");
+      expect(html).toContain("/public/css/dashboard.css");
+      expect(html).toContain("/public/js/dashboard.js");
+      expect(html).toContain("Managed Nodes");
+      expect(html).toContain("Auto-polling");
+      expect(html).toContain("k3s-single-node");
+    });
+
+    it("GET /public/js/dashboard.js should serve dashboard client script with text/javascript", async () => {
+      const res = await fetch(`${baseUrl}/public/js/dashboard.js`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/javascript");
+      const script = await res.text();
+      expect(script).toContain("handlePollingToggle");
+      expect(script).toContain("toggleTheme");
+      expect(script).toContain("https://four.htmx.org/docs");
+    });
+
+    it("GET /public/css/dashboard.css should serve dashboard stylesheet with text/css", async () => {
+      const res = await fetch(`${baseUrl}/public/css/dashboard.css`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/css");
+      const css = await res.text();
+      expect(css).toContain(".pulse-dot");
+      expect(css).toContain(".brand-logo-box");
+    });
+
+    it("GET /public/non-existent.file should return 404", async () => {
+      const res = await fetch(`${baseUrl}/public/non-existent.file`);
+      expect(res.status).toBe(404);
+    });
+
+    it("GET /public/../package.json should return 403 (path traversal protection)", async () => {
+      const res = await fetch(`${baseUrl}/public/../package.json`);
+      expect([403, 404]).toContain(res.status);
+    });
+
+    it("GET /ui/nodes-table should return HTML table rows partial for HTMX", async () => {
+      const res = await fetch(`${baseUrl}/ui/nodes-table`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      const html = await res.text();
+      expect(html).toContain("<tr id=\"row-");
+      expect(html).toContain("k3s-single-node");
+    });
+
+    it("POST /api/reset with HX-Request header should return HTML row partial", async () => {
+      const testMac = "bc:24:11:00:24:33";
+      const res = await fetch(`${baseUrl}/api/reset?mac=${testMac}`, {
+        method: "POST",
+        headers: { "HX-Request": "true" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      const html = await res.text();
+      expect(html).toContain("row-bc2411002433");
+      expect(html).toContain("Pending");
+
+      // Restore to installed state
+      await fetch(`${baseUrl}/api/installed?mac=${testMac}&hostname=k3s-single-node&os=ubuntu`, {
+        method: "POST",
+      });
+    });
+
+    it("GET /api/nodes should return all SQLite node records", async () => {
+      const res = await fetch(`${baseUrl}/api/nodes`);
+      expect(res.status).toBe(200);
+      const nodes = (await res.json()) as any[];
+      expect(Array.isArray(nodes)).toBe(true);
+      expect(nodes.some((n) => n.mac === "bc:24:11:00:24:33")).toBe(true);
+    });
+
+    it("DELETE /api/nodes without mac should return 400 Bad Request", async () => {
+      const res = await fetch(`${baseUrl}/api/nodes`, { method: "DELETE" });
+      expect(res.status).toBe(400);
+      const data = (await res.json()) as any;
+      expect(data.error).toContain("mac");
+    });
+
+    it("DELETE /api/nodes?mac=... should delete record and return JSON success", async () => {
+      const dummyMac = "99:88:77:66:55:44";
+      // First insert dummy
+      await fetch(`${baseUrl}/api/installed?mac=${dummyMac}&hostname=dummy-node&os=ubuntu`, {
+        method: "POST",
+      });
+
+      // Now delete
+      const res = await fetch(`${baseUrl}/api/nodes?mac=${dummyMac}`, { method: "DELETE" });
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as any;
+      expect(data.success).toBe(true);
+    });
+
+    it("DELETE /api/nodes?mac=... with HX-Request header should return HTML row partial for hosts.yaml node", async () => {
+      const testMac = "bc:24:11:00:24:33";
+      const res = await fetch(`${baseUrl}/api/nodes?mac=${testMac}`, {
+        method: "DELETE",
+        headers: { "HX-Request": "true" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      const html = await res.text();
+      expect(html).toContain("row-bc2411002433");
+      expect(html).toContain("Pending");
+
+      // Restore to installed state
+      await fetch(`${baseUrl}/api/installed?mac=${testMac}&hostname=k3s-single-node&os=ubuntu`, {
+        method: "POST",
+      });
+    });
+
+    it("DELETE /api/nodes?mac=... with HX-Request header should return empty string for unconfigured dynamic node", async () => {
+      const dynamicMac = "aa:11:22:33:44:55";
+      await fetch(`${baseUrl}/api/installed?mac=${dynamicMac}&hostname=temp-dynamic&os=ubuntu`, {
+        method: "POST",
+      });
+
+      const res = await fetch(`${baseUrl}/api/nodes?mac=${dynamicMac}`, {
+        method: "DELETE",
+        headers: { "HX-Request": "true" },
+      });
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).toBe("");
+    });
   });
 
   describe("Ubuntu Profiles", () => {

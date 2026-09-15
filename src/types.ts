@@ -56,6 +56,19 @@ export interface HostContext {
   hostConfig: HostConfig;
 }
 
+export type NodeStatus = "PENDING" | "PROVISIONING" | "INSTALLED" | "FAILED";
+
+export interface NodeRecord {
+  mac: string;
+  hostname?: string;
+  ip?: string;
+  os?: string;
+  status: NodeStatus;
+  note?: string;
+  installed_at?: string;
+  updated_at: string;
+}
+
 export interface StateRecord {
   mac: string;
   hostname?: string;
@@ -63,6 +76,7 @@ export interface StateRecord {
   installed_at: string;
   client_ip?: string;
   note?: string;
+  status?: NodeStatus;
 }
 
 export interface AppState {

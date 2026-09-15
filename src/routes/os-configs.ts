@@ -1,4 +1,5 @@
 import type { ConfigManager } from "../config.ts";
+import type { StateManager } from "../core/state.ts";
 import type { ProviderRegistry } from "../providers/registry.ts";
 import type { HostContext } from "../types.ts";
 
@@ -6,7 +7,8 @@ export async function handleOsConfigRoute(
   req: Request,
   pathname: string,
   configMgr: ConfigManager,
-  registry: ProviderRegistry
+  registry: ProviderRegistry,
+  stateMgr?: StateManager
 ): Promise<Response> {
   // Format: /os/<provider-id>/<mac>/<subpath...>
   // e.g. /os/ubuntu/bc:24:11:22:33:44/user-data
@@ -37,6 +39,21 @@ export async function handleOsConfigRoute(
     baseUrl: configMgr.appConfig.baseUrl,
     hostConfig: host,
   };
+
+  if (stateMgr) {
+    const clientIp =
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+      req.headers.get("x-real-ip")?.trim() ||
+      host.network?.ip ||
+      "unknown";
+
+    stateMgr.markProvisioning(cleanMac, {
+      hostname: host.hostname,
+      os: host.os,
+      clientIp,
+      note: host.note,
+    });
+  }
 
   return await provider.handleConfig(subpath, req, ctx);
 }

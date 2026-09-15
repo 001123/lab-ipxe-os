@@ -17,6 +17,7 @@ config/hosts.local.yaml
 # Dynamic Data & State
 data/state.json
 data/*.sqlite*
+data/*.db*
 
 # Large Assets (ISOs, raw images, kernels, initrd, archives)
 assets/**/*
