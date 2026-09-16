@@ -89,7 +89,11 @@ export const server = Bun.serve({
       return await staticServer.serve(req, pathname);
     }
 
-    // 2b. Static Client Public Routes (CSS, JS, Fonts)
+    // 2b. Direct Favicon & Static Client Public Routes (CSS, JS, Fonts, Icons)
+    if (pathname === "/favicon.ico" || pathname === "/apple-touch-icon.png") {
+      return await publicServer.serve(req, `/public${pathname}`);
+    }
+
     if (pathname.startsWith("/public/")) {
       return await publicServer.serve(req, pathname);
     }

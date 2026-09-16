@@ -258,7 +258,25 @@ curl -s http://<BUN_IP>:3000/api/kubeconfig/<hostname-hoặc-mac> | kubectl --ku
 - **Lưu ý mã lỗi HTTP**:
   - `400 Bad Request`: Thiếu định danh node hoặc node cấu hình profile không chạy cụm Kubernetes (ví dụ profile `generic`).
   - `404 Not Found`: Không tìm thấy node trong cơ sở dữ liệu SQLite `data/state.db`.
-  - `502 Bad Gateway`: Node chưa hoàn thành cài đặt, SSH daemon chưa mở hoặc Kubernetes chưa kịp sinh file config.
+  - `502 Bad Gateway`: Node chưa hoàn thành cài đặt, SSH daemon chưa mở, chưa có SSH key hoặc Kubernetes chưa kịp sinh file config.
+
+### 5.4. Lỗi tải Kubeconfig: `Permission denied (publickey,password)`
+- **Triệu chứng**: Khi bấm tải Kubeconfig trên Web Dashboard hoặc gọi `/api/kubeconfig/<node>`, server trả về lỗi `502 Bad Gateway`:
+  ```json
+  {
+    "error": "Failed to fetch kubeconfig from <node> via SSH.",
+    "details": "homelab@<node-ip>: Permission denied (publickey,password,keyboard-interactive).",
+    "hint": "SSH authentication failed. Ensure the server's SSH public key is added to..."
+  }
+  ```
+- **Nguyên nhân**: Server iPXE kết nối SSH sang node bằng user cấu hình (mặc định `homelab`) nhưng node chưa có public key tương ứng trong `~/.ssh/authorized_keys`, hoặc server chưa được cấp SSH private key.
+- **Khắc phục**:
+  1. **Tự động qua deploy script**: Khi triển khai qua `proxmox/deploy-lxc.sh`, script sẽ tự động sao chép SSH key cá nhân từ máy host (`~/.ssh/id_ed25519` hoặc `~/.ssh/id_rsa`) vào `/root/.ssh/` của container LXC.
+  2. **Đồng bộ cấu hình**: Đảm bảo public key tương ứng đã được khai báo trong `default.ssh_authorized_keys` của `config/hosts.yaml` để các node cài đặt tự động nhận diện ngay từ đầu.
+  3. **Thêm thủ công vào node đang chạy**:
+     ```bash
+     ssh <user>@<node-ip> "echo '<SSH_PUBLIC_KEY>' >> ~/.ssh/authorized_keys"
+     ```
 
 ---
 

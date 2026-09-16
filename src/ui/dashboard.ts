@@ -239,6 +239,9 @@ export function renderDashboardHtml(context: {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>iPXE Hub | Node Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="${baseUrl}/public/favicon.svg">
+  <link rel="alternate icon" href="${baseUrl}/public/favicon.ico">
+  <link rel="apple-touch-icon" href="${baseUrl}/public/apple-touch-icon.png">
   
   <!-- Bulma CSS v1.0.4 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
@@ -270,7 +273,8 @@ export function renderDashboardHtml(context: {
     <nav id="navbar-header" class="navbar-card level mb-3" role="navigation" aria-label="main navigation">
       <div class="level-left">
         <div class="level-item">
-          <div class="is-flex is-align-items-center" style="gap: 0.5rem;">
+          <div class="is-flex is-align-items-center" style="gap: 0.65rem;">
+            <img src="${baseUrl}/public/favicon.svg" alt="iPXE Hub Logo" width="28" height="28" style="display: block; border-radius: 6px;" />
             <h1 class="title is-5 mb-0">iPXE Hub</h1>
             <span class="subtitle is-7 has-text-grey font-mono mb-0">v${pkg.version}</span>
           </div>

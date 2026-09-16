@@ -250,6 +250,24 @@ curl -s http://<BUN_IP>:3000/api/kubeconfig/<hostname-or-mac> > kubeconfig-<host
 curl -s http://<BUN_IP>:3000/api/kubeconfig/<hostname-or-mac> | kubectl --kubeconfig=/dev/stdin get nodes -o wide
 ```
 
+### 5.4. Kubeconfig Retrieval Error: `Permission denied (publickey,password)`
+- **Symptom**: Clicking "Kubeconfig" on the dashboard or querying `/api/kubeconfig/<node>` returns `502 Bad Gateway`:
+  ```json
+  {
+    "error": "Failed to fetch kubeconfig from <node> via SSH.",
+    "details": "homelab@<node-ip>: Permission denied (publickey,password,keyboard-interactive).",
+    "hint": "SSH authentication failed. Ensure the server's SSH public key is added to..."
+  }
+  ```
+- **Root Cause**: The iPXE server tries to SSH into the node as the configured user (default `homelab`), but the node does not have the server's public key authorized in `~/.ssh/authorized_keys`, or the server lacks an SSH private key.
+- **Remediation**:
+  1. **Automated via deploy script**: Deploying with `proxmox/deploy-lxc.sh` automatically synchronizes your local workstation's SSH key (`~/.ssh/id_ed25519` or `~/.ssh/id_rsa`) into the LXC container (`/root/.ssh/`).
+  2. **Profile Configuration**: Ensure the matching public key is specified under `default.ssh_authorized_keys` in `config/hosts.yaml` so newly provisioned nodes trust it during bootstrap.
+  3. **Manual Node Authorization**:
+     ```bash
+     ssh <user>@<node-ip> "echo '<SSH_PUBLIC_KEY>' >> ~/.ssh/authorized_keys"
+     ```
+
 ---
 
 ## 6. Layer 6: Proxmox Automation (`proxmox/create-vm.ts`)

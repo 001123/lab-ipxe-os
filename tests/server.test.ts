@@ -334,6 +334,25 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(css).toContain(".brand-logo-box");
     });
 
+    it("GET /public/favicon.svg should serve SVG vector favicon", async () => {
+      const res = await fetch(`${baseUrl}/public/favicon.svg`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("image/svg+xml");
+      const svg = await res.text();
+      expect(svg).toContain("<svg");
+      expect(svg).toContain("orangeStream");
+    });
+
+    it("GET /public/favicon.ico and direct GET /favicon.ico should serve valid ICO", async () => {
+      const resPublic = await fetch(`${baseUrl}/public/favicon.ico`);
+      expect(resPublic.status).toBe(200);
+      expect(resPublic.headers.get("content-type")).toContain("image/x-icon");
+
+      const resDirect = await fetch(`${baseUrl}/favicon.ico`);
+      expect(resDirect.status).toBe(200);
+      expect(resDirect.headers.get("content-type")).toContain("image/x-icon");
+    });
+
     it("GET /public/non-existent.file should return 404", async () => {
       const res = await fetch(`${baseUrl}/public/non-existent.file`);
       expect(res.status).toBe(404);

@@ -55,7 +55,10 @@ export class StaticAssetServer {
     if (!existsSync(safePath)) {
       const embedded = getEmbeddedAsset(subpath);
       if (embedded) {
-        const bodyBytes = Buffer.byteLength(embedded.content, "utf-8");
+        const bodyBytes =
+          typeof embedded.content === "string"
+            ? Buffer.byteLength(embedded.content, "utf-8")
+            : embedded.content.byteLength;
         return new Response(embedded.content, {
           status: 200,
           headers: {

@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import type { ConfigManager } from "../config.ts";
 import type { StateManager } from "../core/state.ts";
 import type { HostConfig } from "../types.ts";
@@ -1033,10 +1036,32 @@ export async function handleApiRoute(
       const stderr = await new Response(proc.stderr).text();
 
       if (exitCode !== 0) {
+        const details = stderr.trim() || `ssh exited with code ${exitCode}`;
+        let hint: string | undefined = undefined;
+
+        if (details.includes("Permission denied")) {
+          let serverPubKey = "";
+          try {
+            const h = homedir() || "/root";
+            const ed25519Pub = resolve(h, ".ssh", "id_ed25519.pub");
+            const rsaPub = resolve(h, ".ssh", "id_rsa.pub");
+            if (existsSync(ed25519Pub)) {
+              serverPubKey = readFileSync(ed25519Pub, "utf-8").trim();
+            } else if (existsSync(rsaPub)) {
+              serverPubKey = readFileSync(rsaPub, "utf-8").trim();
+            }
+          } catch {}
+
+          hint = serverPubKey
+            ? `SSH authentication failed. Ensure the server's SSH public key is added to '${sshUser}@${nodeIp}:~/.ssh/authorized_keys'. Server public key: ${serverPubKey}`
+            : `SSH authentication failed. Ensure the server has an SSH keypair in ~/.ssh/ and its public key is added to '${sshUser}@${nodeIp}:~/.ssh/authorized_keys'.`;
+        }
+
         return new Response(
           JSON.stringify({
             error: `Failed to fetch kubeconfig from ${resolvedHost.hostname} (${nodeIp}) via SSH.`,
-            details: stderr.trim() || `ssh exited with code ${exitCode}`,
+            details,
+            ...(hint ? { hint } : {}),
           }),
           { status: 502, headers: { "Content-Type": "application/json" } }
         );

@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+
+    <!-- Squircle Border Gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.6" />
+      <stop offset="50%" stop-color="#334155" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0.2" />
+    </linearGradient>
+
+    <!-- Main Orange Flame/Stream Gradient -->
+    <linearGradient id="orangeStream" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fb923c" />
+      <stop offset="60%" stop-color="#f97316" />
+      <stop offset="100%" stop-color="#ea580c" />
+    </linearGradient>
+
+    <!-- Bright Core Gradient -->
+    <linearGradient id="orangeCore" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fff7ed" />
+      <stop offset="40%" stop-color="#fed7aa" />
+      <stop offset="100%" stop-color="#f97316" />
+    </linearGradient>
+
+    <!-- Server Top Glow -->
+    <linearGradient id="serverBladeGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#fb923c" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0.8" />
+    </linearGradient>
+
+    <!-- Ambient Glow Filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <filter id="smallGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Container Squircle -->
+  <rect
+    x="8"
+    y="8"
+    width="496"
+    height="496"
+    rx="112"
+    fill="url(#bgGrad)"
+    stroke="url(#borderGrad)"
+    stroke-width="12"
+  />
+
+  <!-- Subtle Radial Aura Behind Stream -->
+  <circle cx="256" cy="180" r="140" fill="#f97316" opacity="0.12" filter="url(#glow)" />
+
+  <!-- === INCOMING NETWORK STREAM (iPXE / ZTP BOOT) === -->
+  <g id="network-stream">
+    <!-- Left Packet Pulse -->
+    <rect x="204" y="68" width="16" height="42" rx="8" fill="#f97316" opacity="0.6" />
+    <!-- Right Packet Pulse -->
+    <rect x="292" y="68" width="16" height="42" rx="8" fill="#f97316" opacity="0.6" />
+
+    <!-- Center Packet Flow Line -->
+    <rect x="246" y="52" width="20" height="60" rx="10" fill="#fed7aa" filter="url(#smallGlow)" />
+
+    <!-- Stream Chevron Arrow Body -->
+    <path
+      d="M 256 226 L 172 134 C 166 128 170 118 178 118 H 222 V 76 C 222 70 226 66 232 66 H 280 C 286 66 290 70 290 76 V 118 H 334 C 342 118 346 128 340 134 Z"
+      fill="url(#orangeStream)"
+      stroke="#fed7aa"
+      stroke-width="4"
+      filter="url(#smallGlow)"
+    />
+
+    <!-- Arrow Inner Core Highlight -->
+    <path
+      d="M 256 206 L 198 142 H 234 V 86 H 278 V 142 H 314 Z"
+      fill="url(#orangeCore)"
+      opacity="0.85"
+    />
+  </g>
+
+  <!-- === SERVER NODE BLADES (BARE-METAL HOST) === -->
+  <!-- Upper Server Chassis (Receiving Stream) -->
+  <g id="server-blade-1">
+    <rect
+      x="88"
+      y="252"
+      width="336"
+      height="82"
+      rx="16"
+      fill="#0d1527"
+      stroke="url(#serverBladeGlow)"
+      stroke-width="5"
+    />
+
+    <!-- Active Port / Status LEDs -->
+    <circle cx="128" cy="293" r="10" fill="#ff6b00" filter="url(#smallGlow)" />
+    <circle cx="128" cy="293" r="5" fill="#fff" />
+    <circle cx="158" cy="293" r="9" fill="#10b981" />
+    <circle cx="186" cy="293" r="9" fill="#38bdf8" />
+
+    <!-- Drive Bays / Air Intake Grills -->
+    <g fill="#1e293b" stroke="#334155" stroke-width="2">
+      <rect x="228" y="268" width="40" height="50" rx="6" />
+      <rect x="276" y="268" width="40" height="50" rx="6" />
+      <rect x="324" y="268" width="40" height="50" rx="6" />
+      <rect x="372" y="268" width="40" height="50" rx="6" />
+    </g>
+    <!-- Drive Latches -->
+    <g fill="#f97316" opacity="0.9">
+      <rect x="234" y="306" width="28" height="5" rx="2" />
+      <rect x="282" y="306" width="28" height="5" rx="2" />
+      <rect x="330" y="306" width="28" height="5" rx="2" />
+      <rect x="378" y="306" width="28" height="5" rx="2" />
+    </g>
+  </g>
+
+  <!-- Lower Server Chassis -->
+  <g id="server-blade-2">
+    <rect
+      x="88"
+      y="354"
+      width="336"
+      height="82"
+      rx="16"
+      fill="#0d1527"
+      stroke="#334155"
+      stroke-width="4"
+    />
+
+    <!-- Secondary Status LEDs -->
+    <circle cx="128" cy="395" r="9" fill="#10b981" />
+    <circle cx="158" cy="395" r="9" fill="#10b981" />
+    <circle cx="186" cy="395" r="9" fill="#64748b" />
+
+    <!-- Drive Bays -->
+    <g fill="#1e293b" stroke="#334155" stroke-width="2">
+      <rect x="228" y="370" width="40" height="50" rx="6" />
+      <rect x="276" y="370" width="40" height="50" rx="6" />
+      <rect x="324" y="370" width="40" height="50" rx="6" />
+      <rect x="372" y="370" width="40" height="50" rx="6" />
+    </g>
+    <!-- Drive Latches -->
+    <g fill="#64748b">
+      <rect x="234" y="408" width="28" height="5" rx="2" />
+      <rect x="282" y="408" width="28" height="5" rx="2" />
+      <rect x="330" y="408" width="28" height="5" rx="2" />
+      <rect x="378" y="408" width="28" height="5" rx="2" />
+    </g>
+  </g>
+</svg>

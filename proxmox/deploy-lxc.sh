@@ -65,6 +65,19 @@ done
 echo " [OK] Connected to LXC container via SSH."
 
 echo ""
+echo "--> Syncing local SSH key to LXC /root/.ssh/ for remote node management..."
+ssh "${SSH_OPTS[@]}" "root@$LXC_IP" "mkdir -p /root/.ssh && chmod 700 /root/.ssh"
+if [ -f "$HOME/.ssh/id_ed25519" ]; then
+    scp "${SSH_OPTS[@]}" "$HOME/.ssh/id_ed25519" "root@$LXC_IP:/root/.ssh/id_ed25519"
+    scp "${SSH_OPTS[@]}" "$HOME/.ssh/id_ed25519.pub" "root@$LXC_IP:/root/.ssh/id_ed25519.pub"
+    ssh "${SSH_OPTS[@]}" "root@$LXC_IP" "chmod 600 /root/.ssh/id_ed25519 && chmod 644 /root/.ssh/id_ed25519.pub"
+elif [ -f "$HOME/.ssh/id_rsa" ]; then
+    scp "${SSH_OPTS[@]}" "$HOME/.ssh/id_rsa" "root@$LXC_IP:/root/.ssh/id_rsa"
+    scp "${SSH_OPTS[@]}" "$HOME/.ssh/id_rsa.pub" "root@$LXC_IP:/root/.ssh/id_rsa.pub"
+    ssh "${SSH_OPTS[@]}" "root@$LXC_IP" "chmod 600 /root/.ssh/id_rsa && chmod 644 /root/.ssh/id_rsa.pub"
+fi
+
+echo ""
 echo "======================================================================"
 echo "  [4/5] Deploying binary and assets to /opt/lab-ipxe-os..."
 echo "======================================================================"

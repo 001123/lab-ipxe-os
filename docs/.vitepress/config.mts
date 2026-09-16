@@ -9,6 +9,11 @@ export default withMermaid(
     cleanUrls: true,
     lastUpdated: true,
 
+    head: [
+      ['link', { rel: 'icon', type: 'image/svg+xml', href: '/lab-ipxe-os/favicon.svg' }],
+      ['link', { rel: 'alternate icon', href: '/lab-ipxe-os/favicon.ico' }],
+    ],
+
     locales: {
       en: {
         label: 'English',
@@ -113,6 +118,7 @@ export default withMermaid(
 
     themeConfig: {
       siteTitle: 'lab-ipxe-os',
+      logo: '/favicon.svg',
 
       search: {
         provider: 'local',
