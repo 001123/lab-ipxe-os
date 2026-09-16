@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -130,17 +130,33 @@ jobs:
           cat checksums.txt
           cd ../..
 
+      - name: Generate Release Notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Generating release notes for ${{ steps.version.outputs.TAG_NAME }}..."
+          gh api -X POST /repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name="${{ steps.version.outputs.TAG_NAME }}" \
+            -f target_commitish="${{ github.sha }}" \
+            --jq .body > dist/release_notes.md || true
+
+          if [ ! -s dist/release_notes.md ]; then
+            echo "Release notes generation was empty, creating fallback notes..."
+            echo "Release ${{ steps.version.outputs.TAG_NAME }}" > dist/release_notes.md
+          fi
+          cat dist/release_notes.md
+
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.TAG_NAME }}
           name: ${{ steps.version.outputs.TAG_NAME }}
+          body_path: dist/release_notes.md
           files: |
             dist/packages/lab-ipxe-os-*.tar.gz
             dist/packages/checksums.txt
           draft: ${{ github.event.inputs.draft == 'true' }}
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
-          generate_release_notes: true
 
       - name: Commit and Push Synchronized package.json to main
         run: |
