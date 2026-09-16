@@ -138,3 +138,42 @@ jobs:
           draft: ${{ github.event.inputs.draft == 'true' }}
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
           generate_release_notes: true
+
+      - name: Commit and Push Synchronized package.json to main
+        run: |
+          NEW_VER="${{ steps.version.outputs.VERSION }}"
+          echo "Syncing package.json to version ${NEW_VER} on main branch..."
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Discard working tree changes from build steps
+          git checkout -- .
+
+          # Fetch and checkout main branch
+          git fetch origin main
+          git checkout main
+          git pull --rebase origin main
+
+          # Synchronize package.json
+          bun -e "
+            import fs from 'fs';
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            if (pkg.version !== '${NEW_VER}') {
+              pkg.version = '${NEW_VER}';
+              fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+              console.log('package.json updated to ${NEW_VER}');
+            } else {
+              console.log('package.json is already at version ${NEW_VER}');
+            }
+          "
+
+          # Commit and push if changed
+          if ! git diff --quiet package.json; then
+            git add package.json
+            git commit -m "chore(release): bump version to ${NEW_VER} [skip ci]"
+            git push origin main
+            echo "Successfully pushed updated package.json to main."
+          else
+            echo "No package.json changes detected on main branch. Skipping commit."
+          fi

@@ -4,6 +4,7 @@
  */
 
 import type { HostConfig } from "../types.ts";
+import pkg from "../../package.json";
 
 export interface DashboardHostItem {
   mac: string;
@@ -271,7 +272,7 @@ export function renderDashboardHtml(context: {
         <div class="level-item">
           <div class="is-flex is-align-items-center" style="gap: 0.5rem;">
             <h1 class="title is-5 mb-0">iPXE Hub</h1>
-            <span class="subtitle is-7 has-text-grey font-mono mb-0">v.0.0.1</span>
+            <span class="subtitle is-7 has-text-grey font-mono mb-0">v${pkg.version}</span>
           </div>
         </div>
       </div>
