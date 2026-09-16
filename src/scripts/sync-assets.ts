@@ -90,10 +90,10 @@ const ASSET_SPECS: AssetSpec[] = [
       },
       {
         name: "initrd",
-        description: "openSUSE Leap Micro 6.2 Initrd (Extracted from openSUSE-Leap-Micro.x86_64-6.2.initrd)",
+        description: "openSUSE Leap Micro 6.2 Initrd (Extracted from pxeboot.openSUSE-Leap-Micro.x86_64-6.2.initrd)",
         required: true,
         extractedFromIso: {
-          sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.initrd",
+          sourceFile: "pxeboot.openSUSE-Leap-Micro.x86_64-6.2.initrd",
         },
       },
       {
