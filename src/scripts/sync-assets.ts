@@ -104,6 +104,14 @@ const ASSET_SPECS: AssetSpec[] = [
           sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.xz",
         },
       },
+      {
+        name: "openSUSE-Leap-Micro.x86_64-6.2.sha256",
+        description: "openSUSE Leap Micro 6.2 Image SHA256 Checksum (Required by Kiwi PXE Netboot)",
+        required: true,
+        extractedFromIso: {
+          sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.sha256",
+        },
+      },
     ],
   },
 ];
