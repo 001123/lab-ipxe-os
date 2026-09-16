@@ -185,7 +185,34 @@ Khi máy đang trong quá trình cài đặt mà bị dừng hoặc báo lỗi:
     rm -rf /tmp/casper
     ```
   - Trong kịch bản iPXE, luôn thêm `imgfree` và tham số `root=/dev/ram0 ramdisk_size=3500000`.
-  - **Xem tài liệu hướng dẫn chuyên sâu**: [Cẩm Nang Đồng Bộ Kernel/Rootfs & Tích Hợp netboot.xyz](file:///Users/timi/lab/lab-ipxe-os/docs/kernel-sync-and-netboot-guide.md).
+  - **Xem tài liệu hướng dẫn chuyên sâu**: [Cẩm Nang Đồng Bộ Kernel/Rootfs & Tích Hợp netboot.xyz](kernel-sync-and-netboot-guide.md).
+
+---
+
+### 4.5. Sự Cố openSUSE Leap Micro 6.2 (Kiwi PXE Netboot & Combustion)
+
+Khác với Ubuntu dùng Subiquity / Casper, openSUSE Leap Micro sử dụng framework **Kiwi OEM PXE Netboot** kết hợp với **Combustion script**. Dưới đây là các sự cố đặc thù khi triển khai qua mạng:
+
+#### 4.5.1. Màn hình đen sau khi tải xong `vmlinuz` và `initrd`
+- **Triệu chứng**: iPXE tải thành công kernel và initrd, sau khi thực hiện lệnh `boot` thì màn hình console chuyển sang màu đen hoặc treo cứng hoàn toàn không có thông báo lỗi.
+- **Nguyên nhân**: File `assets/suse-micro/6.2/initrd` bị nạp nhầm bản offline `openSUSE-Leap-Micro.x86_64-6.2.initrd` (chỉ dùng cho cài đặt trực tiếp qua USB/CD-ROM). File này **không chứa module mạng PXE của dracut**. Khi kernel khởi chạy với các cờ `rd.kiwi.install.pxe rd.neednet=1`, dracut sập ngay trước khi kích hoạt driver hiển thị/console.
+- **Cách khắc phục**:
+  - Đảm bảo file `initrd` được trích xuất từ `pxeboot.openSUSE-Leap-Micro.x86_64-6.2.initrd` (chứa đầy đủ driver card mạng và hook netboot của Kiwi).
+  - Kiểm tra dung lượng `initrd`: bản pxeboot chuẩn có dung lượng khoảng **202.8MB** (212,671,947 bytes).
+
+#### 4.5.2. Lỗi `failed to fetch ... sha256 rồi reboot`
+- **Triệu chứng**: Kernel và initrd PXE khởi động bình thường, xuất hiện thông báo dracut kiwi netboot nhưng sau đó báo lỗi `failed to fetch http://.../openSUSE-Leap-Micro.x86_64-6.2.sha256` và máy tự động reboot.
+- **Nguyên nhân**: Trình cài đặt Kiwi PXE luôn yêu cầu tải file mã băm SHA256 tương ứng trước khi tải và ghi đè file ảnh nén `openSUSE-Leap-Micro.x86_64-6.2.xz` vào ổ cứng. Nếu máy chủ trả về HTTP 404, quá trình cài đặt sẽ bị hủy ngay lập tức.
+- **Cách khắc phục**:
+  - Trích xuất file `openSUSE-Leap-Micro.x86_64-6.2.sha256` từ tarball và đặt vào thư mục `assets/suse-micro/6.2/`.
+  - Có thể tạo thêm symlink `openSUSE-Leap-Micro.x86_64-6.2.xz.sha256` để phòng ngừa các phiên bản Kiwi yêu cầu đuôi đầy đủ.
+
+#### 4.5.3. Lỗi thiếu file `.kernel` (HTTP 404 / Broken Symlink)
+- **Triệu chứng**: Kiwi netboot báo không thể tải `openSUSE-Leap-Micro.x86_64-6.2.kernel`.
+- **Nguyên nhân**: Trong file `openSUSE-Leap-Micro.x86_64-Default-SelfInstall.install.tar`, `openSUSE-Leap-Micro.x86_64-6.2.kernel` là một symlink trỏ đến `pxeboot.openSUSE-Leap-Micro.x86_64-6.2.kernel`. Khi script trích xuất đổi tên file đích thành `vmlinuz`, liên kết symlink bị vỡ.
+- **Cách khắc phục**:
+  - Sử dụng cơ chế copy thay vì rename khi trích xuất file gốc từ tarball.
+  - Đảm bảo endpoint `http://<BUN_IP>/assets/suse-micro/6.2/openSUSE-Leap-Micro.x86_64-6.2.kernel` trả về `HTTP 200 OK`.
 
 ---
 
@@ -262,5 +289,8 @@ curl -s http://<BUN_IP>:3000/api/kubeconfig/<hostname-hoặc-mac> | kubectl --ku
 | iPXE báo `Connection timed out` cổng 3000 | L7 HTTP | Kiểm tra `BASE_URL` trong file `.env` của Bun server |
 | Subiquity crash văng ra shell màn hình đen | RAM/OOM | Đổi sang `boot_method: nfs` trong `config/hosts.yaml` |
 | Subiquity báo lỗi ổ đĩa target storage | Ổ Cứng | Kiểm tra xem VM dùng SCSI (`sda`), VirtIO (`vda`) hay NVMe |
+| Leap Micro boot vào bị đen màn hình sau initrd | Kiwi/Initrd | Nạp đúng `pxeboot.openSUSE-Leap-Micro.x86_64-6.2.initrd` thay vì bản offline |
+| Kiwi báo `failed to fetch ... sha256 rồi reboot` | Kiwi Checksum | Bổ sung file `openSUSE-Leap-Micro.x86_64-6.2.sha256` trên server |
+| Kiwi báo `Asset not found: ...kernel` | Symlink | Khôi phục symlink `openSUSE...kernel` trỏ đến `pxeboot...kernel` hợp lệ |
 | Máy cứ reboot xong lại cài lại từ đầu | Anti-Loop | Kiểm tra xem node có gọi được `/api/installed` không, hoặc chạy lệnh reset: `POST /api/reset?mac=...` |
 | Lệnh `kubectl` báo permission denied | K3s | Chạy `sudo chmod 644 /etc/rancher/k3s/k3s.yaml` |

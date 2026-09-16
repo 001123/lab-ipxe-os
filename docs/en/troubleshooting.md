@@ -186,6 +186,32 @@ When installation stalls or fails on the console:
 
 ---
 
+### 4.5. openSUSE Leap Micro 6.2 Issues (Kiwi PXE Netboot & Combustion)
+
+Unlike Ubuntu Subiquity, openSUSE Leap Micro utilizes **Kiwi OEM PXE Netboot** paired with **Combustion firstboot scripts**. The following issues are unique to this netboot engine:
+
+#### 4.5.1. Black Screen / Hang After Loading `vmlinuz` and `initrd`
+- **Symptom**: iPXE downloads both the kernel and initrd, but immediately hangs on a black screen upon executing `boot`.
+- **Root Cause**: The file `assets/suse-micro/6.2/initrd` was mistakenly extracted from `openSUSE-Leap-Micro.x86_64-6.2.initrd` (an offline media installer for CD/USB). This offline initrd **lacks dracut network and kiwi PXE netboot modules**. When the kernel boots with `rd.kiwi.install.pxe rd.neednet=1`, dracut crashes before activating the console framebuffer.
+- **Remediation**:
+  - Ensure `initrd` is sourced from `pxeboot.openSUSE-Leap-Micro.x86_64-6.2.initrd` (size ~202.8MB / 212,671,947 bytes), which contains the complete PXE networking stack.
+
+#### 4.5.2. `failed to fetch http://.../openSUSE...sha256` Followed by Immediate Reboot
+- **Symptom**: The kernel boots into dracut kiwi netboot, but aborts with a failed SHA256 checksum download error and reboots.
+- **Root Cause**: The Kiwi PXE installer strictly verifies the SHA256 digest of the compressed raw image before writing to disk. If the HTTP server returns 404 for `openSUSE-Leap-Micro.x86_64-6.2.sha256`, the install sequence terminates immediately.
+- **Remediation**:
+  - Extract and place `openSUSE-Leap-Micro.x86_64-6.2.sha256` in `assets/suse-micro/6.2/`.
+  - A symlink `openSUSE-Leap-Micro.x86_64-6.2.xz.sha256` can also be provided for Kiwi variants that look for the full image extension.
+
+#### 4.5.3. Missing `.kernel` or `.initrd` File (HTTP 404 / Broken Symlink)
+- **Symptom**: Kiwi netboot aborts reporting that `openSUSE-Leap-Micro.x86_64-6.2.kernel` cannot be fetched.
+- **Root Cause**: In the upstream appliance tarball, `openSUSE-Leap-Micro.x86_64-6.2.kernel` is a relative symlink pointing to `pxeboot.openSUSE-Leap-Micro.x86_64-6.2.kernel`. Renaming the target to `vmlinuz` breaks this symlink.
+- **Remediation**:
+  - Copy rather than rename the source file during extraction.
+  - Verify that `http://<BUN_IP>/assets/suse-micro/6.2/openSUSE-Leap-Micro.x86_64-6.2.kernel` returns `HTTP 200 OK`.
+
+---
+
 ## 5. Layer 5: Kubernetes K3s Bootstrap
 
 ### 5.1. K3s Service Fails to Start or Node Reports `NotReady`
@@ -252,5 +278,8 @@ curl -s http://<BUN_IP>:3000/api/kubeconfig/<hostname-or-mac> | kubectl --kubeco
 | iPXE `Connection timed out` port 3000 | L7 HTTP | Verify `BASE_URL` in `.env` matches LAN IP |
 | Subiquity crashes to black console shell | RAM/OOM | Switch to `boot_method: nfs` in `config/hosts.yaml` |
 | Subiquity disk partitioning error | Storage | Match controller: SCSI (`sda`), VirtIO (`vda`), NVMe |
+| Leap Micro hangs on black screen after initrd | Kiwi/Initrd | Serve `pxeboot.openSUSE-Leap-Micro.x86_64-6.2.initrd` instead of offline initrd |
+| Kiwi halts with `failed to fetch ... sha256` | Kiwi Checksum | Supply `openSUSE-Leap-Micro.x86_64-6.2.sha256` in assets directory |
+| Kiwi reports `Asset not found: ...kernel` | Symlink | Restore valid `openSUSE...kernel` symlink to `pxeboot...kernel` |
 | Machine continuously reinstalls on reboot | Anti-Loop | Check `/api/installed` webhook, or run `POST /api/reset?mac=...` |
 | `kubectl` reports permission denied | K3s | Run `sudo chmod 644 /etc/rancher/k3s/k3s.yaml` |
