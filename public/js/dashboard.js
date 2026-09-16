@@ -63,6 +63,27 @@
     }
   };
 
+  window.showToast = function (message, type = 'is-success') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 99999; max-width: 380px; pointer-events: none;';
+      document.body.appendChild(container);
+    }
+    const notif = document.createElement('div');
+    notif.className = `notification ${type} is-light py-2 px-4 mb-2`;
+    notif.style.cssText = 'pointer-events: auto; box-shadow: 0 4px 14px rgba(0,0,0,0.2); transition: opacity 0.3s ease, transform 0.3s ease; border-radius: 6px;';
+    notif.innerHTML = `<button class="delete is-small"></button><span>${message}</span>`;
+    notif.querySelector('.delete').onclick = () => notif.remove();
+    container.appendChild(notif);
+    setTimeout(() => {
+      notif.style.opacity = '0';
+      notif.style.transform = 'translateY(-10px)';
+      setTimeout(() => notif.remove(), 300);
+    }, 3500);
+  };
+
   window.formatCustomJson = function (textareaId) {
     const elem = document.getElementById(textareaId);
     if (!elem) return;
@@ -107,6 +128,20 @@
       editCustomTextarea.value = Object.keys(customObj).length > 0 ? JSON.stringify(customObj, null, 2) : '';
     }
 
+    // SSH Keys field
+    let sshKeys = [];
+    if (d.sshKeys) {
+      try {
+        sshKeys = JSON.parse(decodeURIComponent(d.sshKeys));
+      } catch (err) {
+        console.error('Failed to parse d.sshKeys:', err);
+      }
+    }
+    const editSshTextarea = document.getElementById('edit-ssh-keys-json');
+    if (editSshTextarea) {
+      editSshTextarea.value = Array.isArray(sshKeys) ? sshKeys.join('\n') : '';
+    }
+
     window.openModal('edit-node-modal');
   };
 
@@ -143,9 +178,10 @@
 
       if (res.ok) {
         window.closeModal('edit-node-modal');
-        // Refresh table
+        // Refresh table & stats
         if (window.htmx) {
           window.htmx.ajax('GET', '/ui/nodes-table', { target: '#nodes-table-body', swap: 'innerHTML' });
+          if (window.triggerStatsRefresh) window.triggerStatsRefresh();
         } else {
           window.location.reload();
         }
@@ -255,11 +291,12 @@
         if (previewBox) previewBox.classList.add('is-hidden');
         if (nameSpan) nameSpan.textContent = 'No file selected';
 
-        alert(data.message || 'Import YAML thành công!');
+        window.showToast(data.message || 'Import YAML thành công!', 'is-success');
 
         // Refresh table using HTMX or reload
         if (window.htmx) {
           window.htmx.ajax('GET', '/ui/nodes-table', { target: '#nodes-table-body', swap: 'innerHTML' });
+          if (window.triggerStatsRefresh) window.triggerStatsRefresh();
         } else {
           window.location.reload();
         }
@@ -312,11 +349,46 @@
 
   document.addEventListener('htmx:afterRequest', (evt) => {
     // If add-node-form was submitted successfully, close modal and reset form
-    if (evt.detail.elt && evt.detail.elt.id === 'add-node-form' && evt.detail.successful) {
+    const elt = evt.detail.elt;
+    const form = elt && (elt.id === 'add-node-form' ? elt : elt.closest('#add-node-form') || elt.form);
+    if (form && form.id === 'add-node-form' && evt.detail.successful) {
       window.closeModal('add-node-modal');
-      evt.detail.elt.reset();
+      form.reset();
+      window.showToast('Tạo node mới thành công!', 'is-success');
     }
   });
+
+  // Listen to server trigger event "hostCreated"
+  document.body.addEventListener('hostCreated', () => {
+    window.closeModal('add-node-modal');
+    const form = document.getElementById('add-node-form');
+    if (form) form.reset();
+    window.showToast('Tạo node mới thành công!', 'is-success');
+  });
+
+  // Trigger stats grid refresh
+  window.triggerStatsRefresh = function () {
+    const statsGrid = document.getElementById('stats-grid');
+    if (statsGrid && window.htmx) {
+      window.htmx.ajax('GET', '/ui/stats', { target: '#stats-grid', swap: 'innerHTML' });
+    }
+  };
+
+  // Manual Table & Stats Refresh
+  window.handleManualRefresh = function (btn) {
+    const icon = btn ? btn.querySelector('.btn-icon') : document.querySelector('#refresh-table-btn .btn-icon');
+    if (icon) icon.classList.add('is-spinning');
+
+    const tableBody = document.getElementById('nodes-table-body');
+    if (tableBody && window.htmx) {
+      window.htmx.ajax('GET', '/ui/nodes-table', { target: '#nodes-table-body', swap: 'innerHTML' });
+    }
+    window.triggerStatsRefresh();
+
+    setTimeout(() => {
+      if (icon) icon.classList.remove('is-spinning');
+    }, 600);
+  };
 
   // Auto-Polling
   let pollInterval = null;
@@ -328,6 +400,7 @@
           if (tableBody && window.htmx) {
             window.htmx.ajax('GET', '/ui/nodes-table', { target: '#nodes-table-body', swap: 'innerHTML' });
           }
+          window.triggerStatsRefresh();
         }, 3000);
       }
     } else {
@@ -337,6 +410,54 @@
       }
     }
   };
+
+  // Detect changes in stat cards to trigger pulse animation
+  let previousStats = {};
+  function initializeStatsCache() {
+    const statsGrid = document.getElementById('stats-grid');
+    if (statsGrid) {
+      previousStats = {};
+      const currentCards = statsGrid.querySelectorAll('[data-stat]');
+      currentCards.forEach((card) => {
+        const statName = card.getAttribute('data-stat');
+        const val = card.getAttribute('data-val');
+        if (statName) {
+          previousStats[statName] = val;
+        }
+      });
+    }
+  }
+
+  document.body.addEventListener('htmx:beforeSwap', (evt) => {
+    if (evt.detail.target && evt.detail.target.id === 'stats-grid') {
+      previousStats = {};
+      const currentCards = evt.detail.target.querySelectorAll('[data-stat]');
+      currentCards.forEach((card) => {
+        const statName = card.getAttribute('data-stat');
+        const val = card.getAttribute('data-val');
+        if (statName) {
+          previousStats[statName] = val;
+        }
+      });
+    }
+  });
+
+  document.body.addEventListener('htmx:afterSwap', (evt) => {
+    if (evt.detail.target && evt.detail.target.id === 'stats-grid') {
+      const newCards = evt.detail.target.querySelectorAll('[data-stat]');
+      newCards.forEach((card) => {
+        const statName = card.getAttribute('data-stat');
+        const newVal = card.getAttribute('data-val');
+        const oldVal = previousStats[statName];
+        if (oldVal !== undefined && newVal !== oldVal) {
+          card.classList.add('stat-box-pulsing');
+          setTimeout(() => {
+            card.classList.remove('stat-box-pulsing');
+          }, 1200);
+        }
+      });
+    }
+  });
 
   // Initial theme application
   const initialTheme = getPreferredTheme();
@@ -352,5 +473,6 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
+    initializeStatsCache();
   });
 })();

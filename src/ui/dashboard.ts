@@ -115,6 +115,7 @@ export function renderNodeRow(host: DashboardHostItem, baseUrl: string): string 
             data-gitops-path="${custom.gitops_path || ""}"
             data-argocd-hostname="${custom.argocd_hostname || ""}"
             data-custom="${encodeURIComponent(JSON.stringify(custom || {}))}"
+            data-ssh-keys="${encodeURIComponent(JSON.stringify(cfg.ssh_authorized_keys || []))}"
           >
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -174,6 +175,42 @@ export function renderNodeRow(host: DashboardHostItem, baseUrl: string): string 
         </div>
       </td>
     </tr>
+  `;
+}
+
+export interface DashboardStats {
+  total: number;
+  installed: number;
+  provisioning: number;
+  pending: number;
+}
+
+export function renderStatsGridPartial(stats: DashboardStats): string {
+  return `
+    <div class="column is-6-mobile is-3-tablet">
+      <div class="box stat-box" data-stat="total" data-val="${stats.total}">
+        <p class="heading has-text-grey">Total Nodes</p>
+        <p class="title stat-number">${stats.total}</p>
+      </div>
+    </div>
+    <div class="column is-6-mobile is-3-tablet">
+      <div class="box stat-box" data-stat="installed" data-val="${stats.installed}">
+        <p class="heading has-text-success">Installed</p>
+        <p class="title has-text-success stat-number">${stats.installed}</p>
+      </div>
+    </div>
+    <div class="column is-6-mobile is-3-tablet">
+      <div class="box stat-box" data-stat="provisioning" data-val="${stats.provisioning}">
+        <p class="heading has-text-warning">Provisioning</p>
+        <p class="title has-text-warning stat-number">${stats.provisioning}</p>
+      </div>
+    </div>
+    <div class="column is-6-mobile is-3-tablet">
+      <div class="box stat-box" data-stat="pending" data-val="${stats.pending}">
+        <p class="heading has-text-grey-light">Pending</p>
+        <p class="title has-text-grey stat-number">${stats.pending}</p>
+      </div>
+    </div>
   `;
 }
 
@@ -262,31 +299,14 @@ export function renderDashboardHtml(context: {
     </nav>
 
     <!-- Stats Grid -->
-    <div class="columns is-mobile is-multiline mb-5">
-      <div class="column is-6-mobile is-3-tablet">
-        <div class="box stat-box">
-          <p class="heading has-text-grey">Total Nodes</p>
-          <p class="title">${stats.total}</p>
-        </div>
-      </div>
-      <div class="column is-6-mobile is-3-tablet">
-        <div class="box stat-box">
-          <p class="heading has-text-success">Installed</p>
-          <p class="title has-text-success">${stats.installed}</p>
-        </div>
-      </div>
-      <div class="column is-6-mobile is-3-tablet">
-        <div class="box stat-box">
-          <p class="heading has-text-warning">Provisioning</p>
-          <p class="title has-text-warning">${stats.provisioning}</p>
-        </div>
-      </div>
-      <div class="column is-6-mobile is-3-tablet">
-        <div class="box stat-box">
-          <p class="heading has-text-grey-light">Pending</p>
-          <p class="title has-text-grey">${stats.pending}</p>
-        </div>
-      </div>
+    <div
+      id="stats-grid"
+      class="columns is-mobile is-multiline mb-5"
+      hx-get="${baseUrl}/ui/stats"
+      hx-trigger="refreshStats from:body"
+      hx-swap="innerHTML"
+    >
+      ${renderStatsGridPartial(stats)}
     </div>
 
     <!-- Table Toolbar -->
@@ -347,10 +367,12 @@ export function renderDashboardHtml(context: {
           </label>
 
           <button
+            id="refresh-table-btn"
             class="button is-light is-small"
             hx-get="${baseUrl}/ui/nodes-table"
             hx-target="#nodes-table-body"
             hx-swap="innerHTML"
+            onclick="handleManualRefresh(this)"
             title="Refresh table data"
           >
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -495,6 +517,21 @@ export function renderDashboardHtml(context: {
               </div>
             </div>
 
+            <!-- SSH Authorized Keys -->
+            <div class="column is-12 py-2">
+              <label class="label is-small mb-1">SSH Authorized Keys</label>
+              <div class="control">
+                <textarea
+                  id="add-ssh-keys-json"
+                  name="ssh_keys_json"
+                  class="textarea is-small is-family-monospace"
+                  rows="3"
+                  placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... admin@homelab&#10;ssh-rsa AAAAB3NzaC1yc2EAAAA... user@work"
+                ></textarea>
+              </div>
+              <p class="help has-text-grey">Tuỳ chọn: Nhập SSH public key (mỗi dòng một key hoặc mảng JSON dạng [&quot;ssh-ed25519 ...&quot;]).</p>
+            </div>
+
             <!-- Custom JSON Parameters -->
             <div class="column is-12 py-2">
               <div class="is-flex is-justify-content-space-between is-align-items-center mb-1">
@@ -626,6 +663,21 @@ export function renderDashboardHtml(context: {
               <div class="control">
                 <input id="edit-note" class="input is-small" type="text" name="note">
               </div>
+            </div>
+
+            <!-- SSH Authorized Keys -->
+            <div class="column is-12 py-2">
+              <label class="label is-small mb-1">SSH Authorized Keys</label>
+              <div class="control">
+                <textarea
+                  id="edit-ssh-keys-json"
+                  name="ssh_keys_json"
+                  class="textarea is-small is-family-monospace"
+                  rows="3"
+                  placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... admin@homelab&#10;ssh-rsa AAAAB3NzaC1yc2EAAAA... user@work"
+                ></textarea>
+              </div>
+              <p class="help has-text-grey">Tuỳ chọn: Nhập SSH public key (mỗi dòng một key hoặc mảng JSON). Để trống nếu muốn xóa hết key.</p>
             </div>
 
             <!-- Custom JSON Parameters -->

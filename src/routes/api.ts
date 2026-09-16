@@ -4,6 +4,7 @@ import type { HostConfig } from "../types.ts";
 import {
   renderNodeRow,
   renderNodesTablePartial,
+  renderStatsGridPartial,
   type DashboardHostItem,
 } from "../ui/dashboard.ts";
 
@@ -46,6 +47,27 @@ export function buildDashboardData(configMgr: ConfigManager, stateMgr: StateMana
       pending: pendingCount,
     },
   };
+}
+
+export function parseSshKeys(input: any): string[] {
+  if (!input) return [];
+  if (Array.isArray(input)) {
+    return input.map((k) => String(k).trim()).filter(Boolean);
+  }
+  const raw = input.toString().trim();
+  if (!raw) return [];
+  if (raw.startsWith("[") && raw.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((k) => String(k).trim()).filter(Boolean);
+      }
+    } catch {}
+  }
+  return raw
+    .split(/\r?\n/)
+    .map((line: string) => line.trim())
+    .filter((line: string) => line.length > 0 && !line.startsWith("#"));
 }
 
 export async function handleApiRoute(
@@ -177,6 +199,13 @@ export async function handleApiRoute(
       }
     }
 
+    let sshAuthorizedKeys: string[] | undefined = undefined;
+    if (bodyData.ssh_keys_json !== undefined && bodyData.ssh_keys_json !== null) {
+      sshAuthorizedKeys = parseSshKeys(bodyData.ssh_keys_json);
+    } else if (bodyData.ssh_authorized_keys !== undefined) {
+      sshAuthorizedKeys = parseSshKeys(bodyData.ssh_authorized_keys);
+    }
+
     const hostPayload: HostConfig = {
       mac: cleanMac,
       hostname: rawHostname.trim(),
@@ -185,6 +214,7 @@ export async function handleApiRoute(
       profile,
       note,
       status: "PENDING",
+      ssh_authorized_keys: sshAuthorizedKeys,
       network: {
         dhcp,
         ip: ip || undefined,
@@ -207,7 +237,7 @@ export async function handleApiRoute(
         status: 200,
         headers: {
           "Content-Type": "text/html; charset=utf-8",
-          "HX-Trigger": "hostCreated",
+          "HX-Trigger": "hostCreated, refreshStats",
         },
       });
     }
@@ -293,6 +323,13 @@ export async function handleApiRoute(
       };
     }
 
+    // SSH Keys patch
+    if (bodyData.ssh_keys_json !== undefined && bodyData.ssh_keys_json !== null) {
+      patch.ssh_authorized_keys = parseSshKeys(bodyData.ssh_keys_json);
+    } else if (bodyData.ssh_authorized_keys !== undefined) {
+      patch.ssh_authorized_keys = parseSshKeys(bodyData.ssh_authorized_keys);
+    }
+
     // Custom patch
     if (bodyData.custom_json !== undefined && bodyData.custom_json !== null) {
       const trimmed = bodyData.custom_json.toString().trim();
@@ -341,7 +378,7 @@ export async function handleApiRoute(
         status: 200,
         headers: {
           "Content-Type": "text/html; charset=utf-8",
-          "HX-Trigger": "hostUpdated",
+          "HX-Trigger": "hostUpdated, refreshStats",
         },
       });
     }
@@ -402,7 +439,10 @@ export async function handleApiRoute(
           const html = renderNodeRow(item, configMgr.appConfig.baseUrl);
           return new Response(html, {
             status: 200,
-            headers: { "Content-Type": "text/html; charset=utf-8" },
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "HX-Trigger": "refreshStats",
+            },
           });
         }
       }
@@ -410,7 +450,10 @@ export async function handleApiRoute(
       stateMgr.deleteHost(cleanMac);
       return new Response("", {
         status: 200,
-        headers: { "Content-Type": "text/html; charset=utf-8" },
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "HX-Trigger": "refreshStats",
+        },
       });
     }
 
@@ -420,7 +463,10 @@ export async function handleApiRoute(
       // Return empty string so HTMX outerHTML swap removes the row completely
       return new Response("", {
         status: 200,
-        headers: { "Content-Type": "text/html; charset=utf-8" },
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "HX-Trigger": "refreshStats",
+        },
       });
     }
 
@@ -556,7 +602,10 @@ export async function handleApiRoute(
         const html = renderNodeRow(item, configMgr.appConfig.baseUrl);
         return new Response(html, {
           status: 200,
-          headers: { "Content-Type": "text/html; charset=utf-8" },
+          headers: {
+            "Content-Type": "text/html; charset=utf-8",
+            "HX-Trigger": "refreshStats",
+          },
         });
       }
     }
@@ -688,6 +737,16 @@ export async function handleApiRoute(
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
+  }
+
+  // GET /ui/stats (HTMX stats grid update)
+  if (pathname === "/ui/stats" && method === "GET") {
+    const data = buildDashboardData(configMgr, stateMgr);
+    const html = renderStatsGridPartial(data.stats);
+    return new Response(html, {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
   }
 
   // GET /ui/nodes-table (HTMX polling update)

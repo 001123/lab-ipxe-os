@@ -13,6 +13,10 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
   const testIsoPath = resolve(process.cwd(), "assets", "test.iso");
 
   beforeAll(() => {
+    // Re-seed state from hosts.yaml to ensure clean test state
+    const stateMgr = new StateManager();
+    stateMgr.seedFromYaml();
+
     // Create dummy ISO file for Range request test
     const dummyBuffer = Buffer.alloc(2048, "A");
     writeFileSync(testIsoPath, dummyBuffer);
@@ -349,7 +353,19 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(html).toContain("k3s-single-node");
     });
 
-    it("POST /api/reset with HX-Request header should return HTML row partial", async () => {
+    it("GET /ui/stats should return HTML stats grid partial for HTMX", async () => {
+      const res = await fetch(`${baseUrl}/ui/stats`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      const html = await res.text();
+      expect(html).toContain("stat-box");
+      expect(html).toContain("Total Nodes");
+      expect(html).toContain("Installed");
+      expect(html).toContain("Provisioning");
+      expect(html).toContain("Pending");
+    });
+
+    it("POST /api/reset with HX-Request header should return HTML row partial and trigger refreshStats", async () => {
       const testMac = "bc:24:11:00:24:33";
       const res = await fetch(`${baseUrl}/api/reset?mac=${testMac}`, {
         method: "POST",
@@ -357,6 +373,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       });
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
+      expect(res.headers.get("hx-trigger")).toContain("refreshStats");
       const html = await res.text();
       expect(html).toContain("row-bc2411002433");
       expect(html).toContain("Pending");
@@ -437,7 +454,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       os: "ubuntu",
       profile: "generic",
     };
-    const baseUrl = "http://localhost:3000";
+    const baseUrl = `http://localhost:${server.port}`;
 
     it("should return k3s-single-node profile with k3s packages and setup late-commands", () => {
       const profile = getUbuntuProfile("k3s-single-node", mockHost, baseUrl);
@@ -506,7 +523,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
         ip: "192.168.250.50",
       },
     };
-    const baseUrl = "http://localhost:3000";
+    const baseUrl = `http://localhost:${server.port}`;
 
     it("should return rke2-single-node profile with packages and configuration snippets", () => {
       const profile = getSuseMicroProfile("rke2-single-node", mockSuseHost, baseUrl);
