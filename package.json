@@ -1,6 +1,6 @@
 {
   "name": "lab-ipxe-os",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Multi-OS iPXE and Cloud-Init Autoinstall server powered by Bun and TypeScript",
   "main": "src/index.ts",
   "scripts": {
