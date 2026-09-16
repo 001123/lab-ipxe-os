@@ -46,10 +46,14 @@ describe("Stats Grid & Auto-polling Synchronization Tests", () => {
       expect(html).toContain('data-stat="installed" data-val="4"');
       expect(html).toContain('data-stat="provisioning" data-val="3"');
       expect(html).toContain('data-stat="pending" data-val="3"');
-      expect(html).toContain('<p class="title stat-number">10</p>');
-      expect(html).toContain('<p class="title has-text-success stat-number">4</p>');
-      expect(html).toContain('<p class="title has-text-warning stat-number">3</p>');
-      expect(html).toContain('<p class="title has-text-grey stat-number">3</p>');
+      expect(html).toContain('<span class="stat-badge-val font-mono">10</span>');
+      expect(html).toContain('<span class="stat-badge-val font-mono has-text-success">4</span>');
+      expect(html).toContain('<span class="stat-badge-val font-mono has-text-warning">3</span>');
+      expect(html).toContain('<span class="stat-badge-val font-mono has-text-grey-light">3</span>');
+      expect(html).toContain('All');
+      expect(html).toContain('Installed');
+      expect(html).toContain('Provisioning');
+      expect(html).toContain('Pending');
     });
 
     it("renderDashboardHtml should include #stats-grid with HTMX attributes and refresh button", () => {

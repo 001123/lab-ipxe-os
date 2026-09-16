@@ -69,7 +69,7 @@ describe("AG-Grid Community Dashboard Integration Tests", () => {
       expect(html).toContain('max-width: 1920px');
       expect(html).toContain('class="dashboard-body has-background-background"');
       expect(html).toContain('id="navbar-header"');
-      expect(html).toContain('class="navbar-card level mb-5"');
+      expect(html).toContain('class="navbar-card level mb-3"');
       expect(html).toContain('id="navbar-polling-badge"');
       expect(html).toContain('class="navbar-laser-stream"');
     });

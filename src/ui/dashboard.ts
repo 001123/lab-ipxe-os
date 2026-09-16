@@ -188,42 +188,26 @@ export interface DashboardStats {
 
 export function renderStatsGridPartial(stats: DashboardStats): string {
   return `
-    <div class="column is-6-mobile is-3-tablet">
-      <div class="box stat-box stat-clickable is-flex is-align-items-center is-justify-content-space-between" data-stat="total" data-val="${stats.total}" onclick="filterGridByStatus('all', this)" title="Show all nodes">
-        <div class="is-flex is-align-items-center">
-          <span class="stat-indicator-dot dot-total"></span>
-          <p class="heading has-text-grey">Total Nodes</p>
-        </div>
-        <p class="title stat-number">${stats.total}</p>
-      </div>
-    </div>
-    <div class="column is-6-mobile is-3-tablet">
-      <div class="box stat-box stat-clickable is-flex is-align-items-center is-justify-content-space-between" data-stat="installed" data-val="${stats.installed}" onclick="filterGridByStatus('installed', this)" title="Filter installed nodes">
-        <div class="is-flex is-align-items-center">
-          <span class="stat-indicator-dot dot-installed"></span>
-          <p class="heading has-text-success">Installed</p>
-        </div>
-        <p class="title has-text-success stat-number">${stats.installed}</p>
-      </div>
-    </div>
-    <div class="column is-6-mobile is-3-tablet">
-      <div class="box stat-box stat-clickable is-flex is-align-items-center is-justify-content-space-between" data-stat="provisioning" data-val="${stats.provisioning}" onclick="filterGridByStatus('provisioning', this)" title="Filter provisioning nodes">
-        <div class="is-flex is-align-items-center">
-          <span class="stat-indicator-dot dot-provisioning"></span>
-          <p class="heading has-text-warning">Provisioning</p>
-        </div>
-        <p class="title has-text-warning stat-number">${stats.provisioning}</p>
-      </div>
-    </div>
-    <div class="column is-6-mobile is-3-tablet">
-      <div class="box stat-box stat-clickable is-flex is-align-items-center is-justify-content-space-between" data-stat="pending" data-val="${stats.pending}" onclick="filterGridByStatus('pending', this)" title="Filter pending nodes">
-        <div class="is-flex is-align-items-center">
-          <span class="stat-indicator-dot dot-pending"></span>
-          <p class="heading has-text-grey-light">Pending</p>
-        </div>
-        <p class="title has-text-grey stat-number">${stats.pending}</p>
-      </div>
-    </div>
+    <button type="button" class="stat-badge stat-box stat-clickable is-flex is-align-items-center" data-stat="total" data-val="${stats.total}" onclick="filterGridByStatus('all', this)" title="Show all nodes">
+      <span class="stat-indicator-dot dot-total"></span>
+      <span class="stat-badge-val font-mono">${stats.total}</span>
+      <span class="stat-badge-label">All</span>
+    </button>
+    <button type="button" class="stat-badge stat-box stat-clickable is-flex is-align-items-center" data-stat="installed" data-val="${stats.installed}" onclick="filterGridByStatus('installed', this)" title="Filter installed nodes">
+      <span class="stat-indicator-dot dot-installed"></span>
+      <span class="stat-badge-val font-mono has-text-success">${stats.installed}</span>
+      <span class="stat-badge-label">Installed</span>
+    </button>
+    <button type="button" class="stat-badge stat-box stat-clickable is-flex is-align-items-center" data-stat="provisioning" data-val="${stats.provisioning}" onclick="filterGridByStatus('provisioning', this)" title="Filter provisioning nodes">
+      <span class="stat-indicator-dot dot-provisioning"></span>
+      <span class="stat-badge-val font-mono has-text-warning">${stats.provisioning}</span>
+      <span class="stat-badge-label">Provisioning</span>
+    </button>
+    <button type="button" class="stat-badge stat-box stat-clickable is-flex is-align-items-center" data-stat="pending" data-val="${stats.pending}" onclick="filterGridByStatus('pending', this)" title="Filter pending nodes">
+      <span class="stat-indicator-dot dot-pending"></span>
+      <span class="stat-badge-val font-mono has-text-grey-light">${stats.pending}</span>
+      <span class="stat-badge-label">Pending</span>
+    </button>
   `;
 }
 
@@ -282,22 +266,12 @@ export function renderDashboardHtml(context: {
   <div class="container dashboard-container px-4 py-5" style="max-width: 1920px;">
     
     <!-- Navbar / Header -->
-    <nav id="navbar-header" class="navbar-card level mb-5" role="navigation" aria-label="main navigation">
+    <nav id="navbar-header" class="navbar-card level mb-3" role="navigation" aria-label="main navigation">
       <div class="level-left">
         <div class="level-item">
-          <div class="is-flex is-align-items-center">
-            <div class="brand-logo-box">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-                <line x1="6" y1="6" x2="6.01" y2="6"/>
-                <line x1="6" y1="18" x2="6.01" y2="18"/>
-              </svg>
-            </div>
-            <div>
-              <h1 class="title is-4 mb-0">iPXE Hub</h1>
-              <p class="subtitle is-7 has-text-grey font-mono">v.0.0.1</p>
-            </div>
+          <div class="is-flex is-align-items-center" style="gap: 0.5rem;">
+            <h1 class="title is-5 mb-0">iPXE Hub</h1>
+            <span class="subtitle is-7 has-text-grey font-mono mb-0">v.0.0.1</span>
           </div>
         </div>
       </div>
@@ -351,21 +325,24 @@ export function renderDashboardHtml(context: {
       <div class="navbar-laser-stream" aria-hidden="true"></div>
     </nav>
 
-    <!-- Stats Grid -->
-    <div
-      id="stats-grid"
-      class="columns is-mobile is-multiline mb-5"
-      hx-get="${baseUrl}/ui/stats"
-      hx-trigger="refreshStats from:body"
-      hx-swap="innerHTML"
-    >
-      ${renderStatsGridPartial(stats)}
-    </div>
-
     <!-- Table Toolbar -->
-    <div class="level mb-3">
+    <div class="level mb-3 table-toolbar-level">
       <div class="level-left">
-        <div class="level-item">
+        <div class="level-item is-flex is-align-items-center toolbar-left-group" style="gap: 0.65rem;">
+          <!-- Stats Badges (HTMX auto-synced) -->
+          <div
+            id="stats-grid"
+            class="stats-badges-container is-flex is-align-items-center"
+            hx-get="${baseUrl}/ui/stats"
+            hx-trigger="refreshStats from:body"
+            hx-swap="innerHTML"
+          >
+            ${renderStatsGridPartial(stats)}
+          </div>
+
+          <div class="toolbar-divider is-hidden-mobile"></div>
+
+          <!-- Quick Search -->
           <div class="control has-icons-left">
             <input
               id="grid-search-input"
@@ -529,7 +506,7 @@ export function renderDashboardHtml(context: {
             onclick="terminalManager && terminalManager.togglePause()"
             title="Pause/Resume live stream"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="terminal-pause-icon">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="terminal-pause-icon">
               <rect x="6" y="4" width="4" height="16"></rect>
               <rect x="14" y="4" width="4" height="16"></rect>
             </svg>
@@ -543,7 +520,7 @@ export function renderDashboardHtml(context: {
             onclick="terminalManager && terminalManager.clearScreen()"
             title="Clear terminal view (client only)"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
             </svg>
@@ -557,7 +534,7 @@ export function renderDashboardHtml(context: {
             onclick="terminalManager && terminalManager.purgeServerLogs()"
             title="Xóa vĩnh viễn toàn bộ log trên server"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
@@ -572,7 +549,7 @@ export function renderDashboardHtml(context: {
             download="server.log"
             title="Download server.log file"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
