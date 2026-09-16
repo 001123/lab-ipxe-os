@@ -106,8 +106,11 @@ jobs:
           for TARGET in "${TARGETS[@]}"; do
             BUILD_DIR="dist/builds/${TARGET}"
             
-            # Include documentation and configuration examples
+            # Include documentation, web assets and configuration examples
             cp README.md "${BUILD_DIR}/"
+            if [ -d "public" ]; then
+              cp -r public "${BUILD_DIR}/"
+            fi
             mkdir -p "${BUILD_DIR}/config"
             if [ -d "config/examples" ]; then
               cp -r config/examples "${BUILD_DIR}/config/"

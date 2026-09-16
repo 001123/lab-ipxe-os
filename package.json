@@ -11,6 +11,7 @@
     "proxmox:create": "bun proxmox/create-vm.ts",
     "proxmox:create-lxc": "bun proxmox/create-lxc.ts",
     "proxmox:deploy-lxc": "bash proxmox/deploy-lxc.sh",
+    "proxmox:deploy-lxc:build": "bash proxmox/deploy-lxc.sh --build",
     "proxmox:deploy-lxc:clean": "bash proxmox/deploy-lxc.sh --clean",
     "build": "bun build --compile --minify src/index.ts --outfile dist/lab-ipxe-os",
     "build:linux-x64": "bun build --compile --minify --target=bun-linux-x64 src/index.ts --outfile dist/lab-ipxe-os-linux-x64",

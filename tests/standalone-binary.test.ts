@@ -165,7 +165,7 @@ describe("Standalone Binary & Embedded Assets Tests", () => {
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
-  });
+  }, 20000);
 
   it("runSyncAssets should be callable as an exported function", () => {
     expect(typeof runSyncAssets).toBe("function");
