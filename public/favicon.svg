@@ -1,33 +1,34 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Background Dark Gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#111827" />
-      <stop offset="100%" stop-color="#030712" />
-    </linearGradient>
+    <!-- Deep Matte Dark Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#192233" />
+      <stop offset="60%" stop-color="#0d131f" />
+      <stop offset="100%" stop-color="#05070e" />
+    </radialGradient>
 
-    <!-- Subtle Border Gradient -->
+    <!-- Subtle Minimalist Border -->
     <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f97316" stop-opacity="0.6" />
-      <stop offset="50%" stop-color="#374151" stop-opacity="0.3" />
-      <stop offset="100%" stop-color="#f97316" stop-opacity="0.4" />
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.85" />
+      <stop offset="50%" stop-color="#334155" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#ea580c" stop-opacity="0.65" />
     </linearGradient>
 
-    <!-- Vibrant Orange Gradient for letter 'i' -->
+    <!-- Vibrant Pure Orange Gradient for 'i' -->
     <linearGradient id="orangeIGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#fb923c" />
-      <stop offset="45%" stop-color="#f97316" />
+      <stop offset="0%" stop-color="#ffad66" />
+      <stop offset="30%" stop-color="#f97316" />
       <stop offset="100%" stop-color="#ea580c" />
     </linearGradient>
 
-    <!-- Soft Glow Filter -->
-    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    <!-- Soft Depth Glow & Shadow -->
+    <filter id="dropShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000000" flood-opacity="0.55" />
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#f97316" flood-opacity="0.4" />
     </filter>
   </defs>
 
-  <!-- Container Squircle Background -->
+  <!-- Squircle Container Background -->
   <rect
     x="12"
     y="12"
@@ -39,27 +40,24 @@
     stroke-width="8"
   />
 
-  <!-- Ambient Backlight -->
-  <circle cx="256" cy="256" r="160" fill="#f97316" opacity="0.12" filter="url(#softGlow)" />
+  <!-- === MINIMAL LETTER "i" (PERFECTLY CENTERED) === -->
+  <g filter="url(#dropShadow)">
+    <!-- Dot of the "i" -->
+    <circle
+      cx="256"
+      cy="142"
+      r="48"
+      fill="url(#orangeIGrad)"
+    />
 
-  <!-- === MINIMAL LETTER "i" === -->
-  <!-- Dot of the "i" -->
-  <circle
-    cx="256"
-    cy="144"
-    r="44"
-    fill="url(#orangeIGrad)"
-    filter="url(#softGlow)"
-  />
-
-  <!-- Stem of the "i" -->
-  <rect
-    x="212"
-    y="226"
-    width="88"
-    height="182"
-    rx="44"
-    fill="url(#orangeIGrad)"
-    filter="url(#softGlow)"
-  />
+    <!-- Stem of the "i" -->
+    <rect
+      x="208"
+      y="224"
+      width="96"
+      height="194"
+      rx="22"
+      fill="url(#orangeIGrad)"
+    />
+  </g>
 </svg>

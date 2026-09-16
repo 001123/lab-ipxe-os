@@ -1,322 +1,63 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Background Dark Slate Gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a" />
-      <stop offset="55%" stop-color="#080e1a" />
-      <stop offset="100%" stop-color="#020611" />
-    </linearGradient>
+    <!-- Deep Matte Dark Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#192233" />
+      <stop offset="60%" stop-color="#0d131f" />
+      <stop offset="100%" stop-color="#05070e" />
+    </radialGradient>
 
-    <!-- Outer Squircle Metallic Border -->
+    <!-- Subtle Minimalist Border -->
     <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f97316" stop-opacity="0.9" />
-      <stop offset="35%" stop-color="#64748b" stop-opacity="0.55" />
-      <stop offset="70%" stop-color="#1e293b" stop-opacity="0.85" />
-      <stop offset="100%" stop-color="#ea580c" stop-opacity="0.8" />
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.85" />
+      <stop offset="50%" stop-color="#334155" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#ea580c" stop-opacity="0.65" />
     </linearGradient>
 
-    <!-- Glowing Orange i-Letter Gradients -->
+    <!-- Vibrant Pure Orange Gradient for 'i' -->
     <linearGradient id="orangeIGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffa057" />
-      <stop offset="35%" stop-color="#f97316" />
+      <stop offset="0%" stop-color="#ffad66" />
+      <stop offset="30%" stop-color="#f97316" />
       <stop offset="100%" stop-color="#ea580c" />
     </linearGradient>
 
-    <radialGradient id="dotRadial" cx="50%" cy="36%" r="64%">
-      <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="22%" stop-color="#ffedd5" />
-      <stop offset="55%" stop-color="#f97316" />
-      <stop offset="100%" stop-color="#c2410c" />
-    </radialGradient>
-
-    <!-- Server Chassis Metal Gradients -->
-    <linearGradient id="chassis1Grad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#3b4b66" />
-      <stop offset="12%" stop-color="#243247" />
-      <stop offset="85%" stop-color="#111a29" />
-      <stop offset="100%" stop-color="#0a101a" />
-    </linearGradient>
-
-    <linearGradient id="chassis2Grad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#303e54" />
-      <stop offset="15%" stop-color="#1c2738" />
-      <stop offset="85%" stop-color="#0e1522" />
-      <stop offset="100%" stop-color="#080c14" />
-    </linearGradient>
-
-    <!-- Polished Stainless Steel Rack Ear Gradient -->
-    <linearGradient id="steelEarGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#64748b" />
-      <stop offset="35%" stop-color="#94a3b8" />
-      <stop offset="65%" stop-color="#cbd5e1" />
-      <stop offset="100%" stop-color="#475569" />
-    </linearGradient>
-
-    <!-- Drive Bay Gradients (Industrial Metallic Caddies) -->
-    <linearGradient id="driveCaddyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#42506b" />
-      <stop offset="15%" stop-color="#2d374a" />
-      <stop offset="85%" stop-color="#1a2230" />
-      <stop offset="100%" stop-color="#111722" />
-    </linearGradient>
-
-    <linearGradient id="driveHandleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#64748b" />
-      <stop offset="50%" stop-color="#94a3b8" />
-      <stop offset="100%" stop-color="#475569" />
-    </linearGradient>
-
-    <!-- Glow & Lighting Filters -->
-    <filter id="auraGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="32" result="blur" />
-    </filter>
-    <filter id="intenseGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="12" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
-    <filter id="ledGlow" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="4.5" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    <!-- Soft Depth Glow & Shadow -->
+    <filter id="dropShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000000" flood-opacity="0.55" />
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#f97316" flood-opacity="0.4" />
     </filter>
   </defs>
 
-  <!-- Container Squircle Background -->
+  <!-- Squircle Container Background -->
   <rect
-    x="8"
-    y="8"
-    width="496"
-    height="496"
-    rx="112"
+    x="12"
+    y="12"
+    width="488"
+    height="488"
+    rx="116"
     fill="url(#bgGrad)"
     stroke="url(#borderGrad)"
-    stroke-width="12"
+    stroke-width="8"
   />
 
-  <!-- Ambient Glow Behind "i" and Server -->
-  <circle cx="256" cy="180" r="145" fill="#f97316" opacity="0.18" filter="url(#auraGlow)" />
-  <circle cx="256" cy="90" r="80" fill="#ff6b00" opacity="0.25" filter="url(#auraGlow)" />
-
-  <!-- ========================================== -->
-  <!-- 1. THE PROMINENT LETTER "i" (iPXE BRAND)   -->
-  <!-- ========================================== -->
-  <g id="letter-i">
-    <!-- Network Transmission Signal Waves around the "i" Dot -->
-    <path
-      d="M 172 64 A 46 46 0 0 0 172 120"
-      fill="none"
-      stroke="#f97316"
-      stroke-width="7"
-      stroke-linecap="round"
-      opacity="0.85"
-    />
-    <path
-      d="M 148 48 A 72 72 0 0 0 148 136"
-      fill="none"
-      stroke="#f97316"
-      stroke-width="5"
-      stroke-linecap="round"
-      opacity="0.45"
-    />
-    <path
-      d="M 340 64 A 46 46 0 0 1 340 120"
-      fill="none"
-      stroke="#f97316"
-      stroke-width="7"
-      stroke-linecap="round"
-      opacity="0.85"
-    />
-    <path
-      d="M 364 48 A 72 72 0 0 1 364 136"
-      fill="none"
-      stroke="#f97316"
-      stroke-width="5"
-      stroke-linecap="round"
-      opacity="0.45"
-    />
-
-    <!-- The Dot of the "i" -->
-    <circle cx="256" cy="92" r="42" fill="url(#dotRadial)" filter="url(#intenseGlow)" />
-    <circle cx="256" cy="92" r="42" fill="none" stroke="#fed7aa" stroke-width="3" opacity="0.9" />
-    <circle cx="256" cy="88" r="18" fill="#ffffff" />
-
-    <!-- The Stem of the "i" (Clean, Bold, Iconic Pillar) -->
-    <rect
-      x="226"
-      y="154"
-      width="60"
-      height="124"
-      rx="14"
+  <!-- === MINIMAL LETTER "i" (PERFECTLY CENTERED) === -->
+  <g filter="url(#dropShadow)">
+    <!-- Dot of the "i" -->
+    <circle
+      cx="256"
+      cy="142"
+      r="48"
       fill="url(#orangeIGrad)"
-      stroke="#fed7aa"
-      stroke-width="3.5"
-      filter="url(#intenseGlow)"
     />
 
-    <!-- High-Tech Vertical Light Streak inside "i" Stem -->
-    <rect x="251" y="166" width="10" height="98" rx="5" fill="#ffffff" opacity="0.92" />
-
-    <!-- Downward Network Stream Injection Beam connecting "i" to Server -->
-    <polygon
-      points="244,278 268,278 256,295"
-      fill="#ffedd5"
-      filter="url(#intenseGlow)"
-    />
-  </g>
-
-  <!-- ========================================== -->
-  <!-- 2. SERVER RACK HARDWARE (SYMMETRICAL & PRO) -->
-  <!-- ========================================== -->
-
-  <!-- UPPER SERVER UNIT (1U Active Boot Node) -->
-  <g id="server-chassis-1">
-    <!-- Server Left Rack Ear with Screws -->
-    <rect x="42" y="296" width="26" height="74" rx="4" fill="url(#steelEarGrad)" stroke="#475569" stroke-width="1.5" />
-    <circle cx="55" cy="310" r="4.5" fill="#0f172a" stroke="#cbd5e1" stroke-width="1.5" />
-    <circle cx="55" cy="356" r="4.5" fill="#0f172a" stroke="#cbd5e1" stroke-width="1.5" />
-
-    <!-- Server Right Rack Ear with Screws -->
-    <rect x="444" y="296" width="26" height="74" rx="4" fill="url(#steelEarGrad)" stroke="#475569" stroke-width="1.5" />
-    <circle cx="457" cy="310" r="4.5" fill="#0f172a" stroke="#cbd5e1" stroke-width="1.5" />
-    <circle cx="457" cy="356" r="4.5" fill="#0f172a" stroke="#cbd5e1" stroke-width="1.5" />
-
-    <!-- Server Main Chassis Faceplate -->
+    <!-- Stem of the "i" -->
     <rect
-      x="68"
-      y="296"
-      width="376"
-      height="74"
-      rx="8"
-      fill="url(#chassis1Grad)"
-      stroke="#f97316"
-      stroke-width="2.5"
+      x="208"
+      y="224"
+      width="96"
+      height="194"
+      rx="22"
+      fill="url(#orangeIGrad)"
     />
-    <!-- Brushed Aluminum Top Bevel Highlight -->
-    <line x1="72" y1="298" x2="440" y2="298" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" opacity="0.9" />
-
-    <!-- Left LED Status Cluster -->
-    <circle cx="86" cy="333" r="6.5" fill="#10b981" filter="url(#ledGlow)" />
-    <circle cx="86" cy="333" r="2.5" fill="#ffffff" />
-    <circle cx="104" cy="333" r="6.5" fill="#f97316" filter="url(#ledGlow)" />
-    <circle cx="104" cy="333" r="2.5" fill="#ffffff" />
-
-    <!-- Left 2 Drive Caddies (Bays 1 & 2) -->
-    <g transform="translate(122, 305)">
-      <rect width="48" height="56" rx="5" fill="url(#driveCaddyGrad)" stroke="#475569" stroke-width="1.5" />
-      <rect x="5" y="40" width="38" height="8" rx="2" fill="url(#driveHandleGrad)" />
-      <line x1="8" y1="44" x2="28" y2="44" stroke="#f97316" stroke-width="3" stroke-linecap="round" />
-      <circle cx="38" cy="14" r="2.5" fill="#10b981" />
-    </g>
-    <g transform="translate(176, 305)">
-      <rect width="48" height="56" rx="5" fill="url(#driveCaddyGrad)" stroke="#475569" stroke-width="1.5" />
-      <rect x="5" y="40" width="38" height="8" rx="2" fill="url(#driveHandleGrad)" />
-      <line x1="8" y1="44" x2="28" y2="44" stroke="#f97316" stroke-width="3" stroke-linecap="round" />
-      <circle cx="38" cy="14" r="2.5" fill="#ff6b00" />
-    </g>
-
-    <!-- CENTER NETWORK BOOT SOCKET & ZTP INTERFACE (Directly under "i") -->
-    <g id="center-ztp-port">
-      <!-- Port Bezel Frame -->
-      <rect x="232" y="303" width="48" height="60" rx="6" fill="#090d16" stroke="#f97316" stroke-width="2" />
-      <!-- RJ45 / SFP Port Cage -->
-      <rect x="238" y="310" width="36" height="28" rx="3" fill="#1e293b" stroke="#64748b" stroke-width="1.5" />
-      <!-- Gold Connector Pins -->
-      <line x1="244" y1="316" x2="244" y2="324" stroke="#fbbf24" stroke-width="1.5" />
-      <line x1="249" y1="316" x2="249" y2="324" stroke="#fbbf24" stroke-width="1.5" />
-      <line x1="254" y1="316" x2="254" y2="324" stroke="#fbbf24" stroke-width="1.5" />
-      <line x1="259" y1="316" x2="259" y2="324" stroke="#fbbf24" stroke-width="1.5" />
-      <line x1="264" y1="316" x2="264" y2="324" stroke="#fbbf24" stroke-width="1.5" />
-      <!-- Gigabit / Link Activity LEDs -->
-      <circle cx="244" cy="348" r="3.5" fill="#10b981" filter="url(#ledGlow)" />
-      <circle cx="264" cy="348" r="3.5" fill="#f97316" filter="url(#ledGlow)" />
-    </g>
-
-    <!-- Right 2 Drive Caddies (Bays 3 & 4) -->
-    <g transform="translate(288, 305)">
-      <rect width="48" height="56" rx="5" fill="url(#driveCaddyGrad)" stroke="#475569" stroke-width="1.5" />
-      <rect x="5" y="40" width="38" height="8" rx="2" fill="url(#driveHandleGrad)" />
-      <line x1="8" y1="44" x2="28" y2="44" stroke="#f97316" stroke-width="3" stroke-linecap="round" />
-      <circle cx="38" cy="14" r="2.5" fill="#06b6d4" />
-    </g>
-    <g transform="translate(342, 305)">
-      <rect width="48" height="56" rx="5" fill="url(#driveCaddyGrad)" stroke="#475569" stroke-width="1.5" />
-      <rect x="5" y="40" width="38" height="8" rx="2" fill="url(#driveHandleGrad)" />
-      <line x1="8" y1="44" x2="32" y2="44" stroke="#64748b" stroke-width="3" stroke-linecap="round" />
-      <circle cx="38" cy="14" r="2.5" fill="#64748b" />
-    </g>
-
-    <!-- Right Status & Power Button -->
-    <circle cx="408" cy="333" r="6.5" fill="#06b6d4" filter="url(#ledGlow)" />
-    <circle cx="408" cy="333" r="2.5" fill="#ffffff" />
-    <rect x="422" y="325" width="10" height="16" rx="2" fill="#334155" stroke="#64748b" stroke-width="1" />
-  </g>
-
-  <!-- LOWER SERVER UNIT (1U Secondary Node) -->
-  <g id="server-chassis-2">
-    <!-- Server Left Rack Ear with Screws -->
-    <rect x="42" y="386" width="26" height="74" rx="4" fill="url(#steelEarGrad)" stroke="#475569" stroke-width="1.5" />
-    <circle cx="55" cy="400" r="4.5" fill="#0f172a" stroke="#cbd5e1" stroke-width="1.5" />
-    <circle cx="55" cy="446" r="4.5" fill="#0f172a" stroke="#cbd5e1" stroke-width="1.5" />
-
-    <!-- Server Right Rack Ear with Screws -->
-    <rect x="444" y="386" width="26" height="74" rx="4" fill="url(#steelEarGrad)" stroke="#475569" stroke-width="1.5" />
-    <circle cx="457" cy="400" r="4.5" fill="#0f172a" stroke="#cbd5e1" stroke-width="1.5" />
-    <circle cx="457" cy="446" r="4.5" fill="#0f172a" stroke="#cbd5e1" stroke-width="1.5" />
-
-    <!-- Server Main Chassis Faceplate -->
-    <rect
-      x="68"
-      y="386"
-      width="376"
-      height="74"
-      rx="8"
-      fill="url(#chassis2Grad)"
-      stroke="#475569"
-      stroke-width="2.5"
-    />
-    <!-- Brushed Top Highlight -->
-    <line x1="72" y1="388" x2="440" y2="388" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" opacity="0.8" />
-
-    <!-- Status LEDs (Chassis 2) -->
-    <circle cx="86" cy="423" r="6.5" fill="#10b981" />
-    <circle cx="86" cy="423" r="2.5" fill="#ecfdf5" />
-    <circle cx="104" cy="423" r="6.5" fill="#10b981" />
-    <circle cx="104" cy="423" r="2.5" fill="#ecfdf5" />
-
-    <!-- 4 Hot-Swap Drive Caddies (Chassis 2) -->
-    <g transform="translate(122, 395)">
-      <rect width="48" height="56" rx="5" fill="url(#driveCaddyGrad)" stroke="#334155" stroke-width="1.5" />
-      <rect x="5" y="40" width="38" height="8" rx="2" fill="url(#driveHandleGrad)" />
-      <line x1="8" y1="44" x2="32" y2="44" stroke="#64748b" stroke-width="3" stroke-linecap="round" />
-      <circle cx="38" cy="14" r="2.5" fill="#10b981" />
-    </g>
-    <g transform="translate(176, 395)">
-      <rect width="48" height="56" rx="5" fill="url(#driveCaddyGrad)" stroke="#334155" stroke-width="1.5" />
-      <rect x="5" y="40" width="38" height="8" rx="2" fill="url(#driveHandleGrad)" />
-      <line x1="8" y1="44" x2="32" y2="44" stroke="#64748b" stroke-width="3" stroke-linecap="round" />
-      <circle cx="38" cy="14" r="2.5" fill="#10b981" />
-    </g>
-    <!-- Center Ventilation Grille on Unit 2 -->
-    <g transform="translate(236, 403)">
-      <rect width="40" height="40" rx="4" fill="#0a101a" stroke="#334155" stroke-width="1" />
-      <line x1="6" y1="12" x2="34" y2="12" stroke="#475569" stroke-width="2" stroke-linecap="round" />
-      <line x1="6" y1="20" x2="34" y2="20" stroke="#475569" stroke-width="2" stroke-linecap="round" />
-      <line x1="6" y1="28" x2="34" y2="28" stroke="#475569" stroke-width="2" stroke-linecap="round" />
-    </g>
-    <g transform="translate(288, 395)">
-      <rect width="48" height="56" rx="5" fill="url(#driveCaddyGrad)" stroke="#334155" stroke-width="1.5" />
-      <rect x="5" y="40" width="38" height="8" rx="2" fill="url(#driveHandleGrad)" />
-      <line x1="8" y1="44" x2="32" y2="44" stroke="#64748b" stroke-width="3" stroke-linecap="round" />
-      <circle cx="38" cy="14" r="2.5" fill="#10b981" />
-    </g>
-    <g transform="translate(342, 395)">
-      <rect width="48" height="56" rx="5" fill="url(#driveCaddyGrad)" stroke="#334155" stroke-width="1.5" />
-      <rect x="5" y="40" width="38" height="8" rx="2" fill="url(#driveHandleGrad)" />
-      <line x1="8" y1="44" x2="32" y2="44" stroke="#64748b" stroke-width="3" stroke-linecap="round" />
-      <circle cx="38" cy="14" r="2.5" fill="#64748b" />
-    </g>
-
-    <circle cx="408" cy="423" r="6.5" fill="#f59e0b" />
-    <circle cx="408" cy="423" r="2.5" fill="#fffbeb" />
-    <rect x="422" y="415" width="10" height="16" rx="2" fill="#334155" stroke="#64748b" stroke-width="1" />
   </g>
 </svg>
