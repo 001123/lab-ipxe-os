@@ -9,6 +9,7 @@ import { handleApiRoute, buildDashboardData } from "./routes/api.ts";
 import { renderDashboardHtml } from "./ui/dashboard.ts";
 import { logger } from "./core/logger.ts";
 import { parseCli, printHelp } from "./cli.ts";
+import pkg from "../package.json";
 import { runSyncAssets, getMissingAssetsCount } from "./scripts/sync-assets.ts";
 
 logger.hookConsole();
@@ -22,7 +23,7 @@ if (import.meta.main) {
     process.exit(0);
   }
   if (cliConfig.action === "version") {
-    console.log("lab-ipxe-os v1.0.0");
+    console.log(`lab-ipxe-os v${pkg.version}`);
     process.exit(0);
   }
   if (cliConfig.action === "sync-assets") {

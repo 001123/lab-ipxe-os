@@ -12,12 +12,18 @@
     "build": "bun build --compile --minify src/index.ts --outfile dist/lab-ipxe-os",
     "build:linux-x64": "bun build --compile --minify --target=bun-linux-x64 src/index.ts --outfile dist/lab-ipxe-os-linux-x64",
     "build:linux-arm64": "bun build --compile --minify --target=bun-linux-arm64 src/index.ts --outfile dist/lab-ipxe-os-linux-arm64",
-    "build:all": "bun run build && bun run build:linux-x64 && bun run build:linux-arm64"
+    "build:darwin-arm64": "bun build --compile --minify --target=bun-darwin-arm64 src/index.ts --outfile dist/lab-ipxe-os-darwin-arm64",
+    "build:darwin-x64": "bun build --compile --minify --target=bun-darwin-x64 src/index.ts --outfile dist/lab-ipxe-os-darwin-x64",
+    "build:all": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:darwin-arm64 && bun run build:darwin-x64",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
     "yaml": "^2.7.0"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "vitepress": "^1.6.4"
   }
 }

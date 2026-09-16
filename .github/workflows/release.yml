@@ -1,0 +1,140 @@
+name: Release Standalone Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag name (e.g. v0.1.0). If empty, version in package.json is used.'
+        required: false
+        type: string
+      draft:
+        description: 'Mark this release as draft'
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Mark this release as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run automated test suite
+        run: PORT=0 bun test
+
+      - name: Resolve Version and Sync package.json
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG_NAME="${{ github.event.inputs.tag }}"
+          elif [ -n "${GITHUB_REF_NAME}" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF_NAME}"
+          else
+            PKG_VER=$(bun -e 'import p from "./package.json"; console.log(p.version)')
+            TAG_NAME="v${PKG_VER}"
+          fi
+
+          # Ensure tag starts with 'v'
+          if [[ "$TAG_NAME" != v* ]]; then
+            TAG_NAME="v${TAG_NAME}"
+          fi
+
+          CLEAN_VER="${TAG_NAME#v}"
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "VERSION=${CLEAN_VER}" >> $GITHUB_OUTPUT
+
+          echo "Synchronizing package.json to version ${CLEAN_VER}..."
+          bun -e "
+            import fs from 'fs';
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '${CLEAN_VER}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          echo "Verified package.json version:"
+          bun -e 'import p from "./package.json"; console.log("package.json version:", p.version)'
+
+      - name: Compile Standalone Binaries
+        run: |
+          mkdir -p dist/builds/linux-x64
+          mkdir -p dist/builds/linux-arm64
+          mkdir -p dist/builds/darwin-arm64
+          mkdir -p dist/builds/darwin-x64
+
+          echo "Compiling Linux x64 binary..."
+          bun build --compile --minify --target=bun-linux-x64 src/index.ts --outfile dist/builds/linux-x64/lab-ipxe-os
+
+          echo "Compiling Linux arm64 binary..."
+          bun build --compile --minify --target=bun-linux-arm64 src/index.ts --outfile dist/builds/linux-arm64/lab-ipxe-os
+
+          echo "Compiling macOS Apple Silicon (darwin-arm64) binary..."
+          bun build --compile --minify --target=bun-darwin-arm64 src/index.ts --outfile dist/builds/darwin-arm64/lab-ipxe-os
+
+          echo "Compiling macOS Intel (darwin-x64) binary..."
+          bun build --compile --minify --target=bun-darwin-x64 src/index.ts --outfile dist/builds/darwin-x64/lab-ipxe-os
+
+      - name: Package Archives (.tar.gz) and Generate Checksums
+        run: |
+          TAG="${{ steps.version.outputs.TAG_NAME }}"
+          mkdir -p dist/packages
+
+          TARGETS=("linux-x64" "linux-arm64" "darwin-arm64" "darwin-x64")
+
+          for TARGET in "${TARGETS[@]}"; do
+            BUILD_DIR="dist/builds/${TARGET}"
+            
+            # Include documentation and configuration examples
+            cp README.md "${BUILD_DIR}/"
+            mkdir -p "${BUILD_DIR}/config"
+            if [ -d "config/examples" ]; then
+              cp -r config/examples "${BUILD_DIR}/config/"
+            fi
+            if [ -f "config/examples/hosts.ubuntu.yaml" ]; then
+              cp config/examples/hosts.ubuntu.yaml "${BUILD_DIR}/config/hosts.yaml.example"
+            fi
+
+            ARCHIVE_NAME="lab-ipxe-os-${TAG}-${TARGET}.tar.gz"
+            echo "Creating ${ARCHIVE_NAME}..."
+            tar -czf "dist/packages/${ARCHIVE_NAME}" -C "${BUILD_DIR}" .
+          done
+
+          echo "Generating SHA-256 Checksums..."
+          cd dist/packages
+          sha256sum lab-ipxe-os-*.tar.gz > checksums.txt
+          cat checksums.txt
+          cd ../..
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG_NAME }}
+          name: ${{ steps.version.outputs.TAG_NAME }}
+          files: |
+            dist/packages/lab-ipxe-os-*.tar.gz
+            dist/packages/checksums.txt
+          draft: ${{ github.event.inputs.draft == 'true' }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          generate_release_notes: true
