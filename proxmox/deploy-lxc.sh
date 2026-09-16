@@ -116,6 +116,11 @@ else
     else
         scp "${SSH_OPTS[@]}" config/hosts.example.yaml "root@$LXC_IP:/opt/lab-ipxe-os/config/hosts.yaml"
     fi
+
+    if [ -d "assets" ] && [ -n "$(ls -A assets 2>/dev/null)" ]; then
+        echo "--> Syncing local boot assets to /opt/lab-ipxe-os/assets..."
+        tar -C assets -cf - . | ssh "${SSH_OPTS[@]}" "root@$LXC_IP" "tar -C /opt/lab-ipxe-os/assets -xf -"
+    fi
 fi
 
 echo "--> Setting up systemd service (lab-ipxe-os.service)..."
