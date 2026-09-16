@@ -25,6 +25,11 @@ A high-performance, lightweight **Multi-OS iPXE and Cloud-Init Autoinstall Serve
 
 ---
 
+## 📷 Screen shoot
+
+<img width="1557" height="1016" alt="image" src="https://github.com/user-attachments/assets/4ec691d9-3189-4ebb-a241-27ce1242ef7b" />
+
+
 ## 🚀 Quick Start
 
 ### Option 1: Standalone Binary (Recommended)
