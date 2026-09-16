@@ -112,6 +112,22 @@ const ASSET_SPECS: AssetSpec[] = [
           sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.sha256",
         },
       },
+      {
+        name: "openSUSE-Leap-Micro.x86_64-6.2.kernel",
+        description: "openSUSE Leap Micro 6.2 Kernel Alias (Required by Kiwi PXE Netboot)",
+        required: false,
+        extractedFromIso: {
+          sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.kernel",
+        },
+      },
+      {
+        name: "openSUSE-Leap-Micro.x86_64-6.2.initrd",
+        description: "openSUSE Leap Micro 6.2 Initrd Alias (Required by Kiwi PXE Netboot)",
+        required: false,
+        extractedFromIso: {
+          sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.initrd",
+        },
+      },
     ],
   },
 ];
@@ -132,14 +148,16 @@ function extractFromIso(isoPath: string, internalPath: string, destPath: string)
       const extractedPath = join(destDir, internalPath);
       if (existsSync(extractedPath)) {
         if (resolve(extractedPath) !== resolve(destPath)) {
-          renameSync(extractedPath, destPath);
           const parts = internalPath.split("/");
           if (parts.length > 1) {
+            renameSync(extractedPath, destPath);
             const topDir = parts[0];
             const dirToRemove = join(destDir, topDir);
             if (existsSync(dirToRemove) && dirToRemove !== destDir) {
               rmSync(dirToRemove, { recursive: true, force: true });
             }
+          } else {
+            copyFileSync(extractedPath, destPath);
           }
         }
         return true;
@@ -161,7 +179,12 @@ function extractFromIso(isoPath: string, internalPath: string, destPath: string)
         const extractedPath = join(destDir, internalPath);
         if (existsSync(extractedPath)) {
           if (resolve(extractedPath) !== resolve(destPath)) {
-            renameSync(extractedPath, destPath);
+            const parts = internalPath.split("/");
+            if (parts.length > 1) {
+              renameSync(extractedPath, destPath);
+            } else {
+              copyFileSync(extractedPath, destPath);
+            }
           }
           return true;
         }
