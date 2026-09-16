@@ -27,7 +27,7 @@ export class ServerLogger {
   private isHooked = false;
 
   constructor(customLogDir?: string) {
-    this.logDir = customLogDir || join(process.cwd(), "logs");
+    this.logDir = customLogDir || process.env.LOG_DIR || join(process.cwd(), "logs");
     this.logFilePath = join(this.logDir, "server.log");
     this.originalConsole = {
       log: console.log.bind(console),

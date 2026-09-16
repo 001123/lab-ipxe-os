@@ -10,6 +10,10 @@ export interface AppConfig {
   baseUrl: string;
   ipxeMenuTimeout: number;
   configPath: string;
+  dataDir?: string;
+  dbPath?: string;
+  assetsDir?: string;
+  logDir?: string;
 }
 
 export class ConfigManager {
@@ -17,15 +21,38 @@ export class ConfigManager {
   public appConfig: AppConfig;
   private stateMgr?: StateManager;
 
-  constructor(configPath?: string, stateMgr?: StateManager) {
-    this.configPath = resolve(configPath || process.env.CONFIG_PATH || "./config/hosts.yaml");
+  constructor(
+    configPathOrOptions?: string | Partial<AppConfig>,
+    stateMgr?: StateManager
+  ) {
+    const opts: Partial<AppConfig> =
+      typeof configPathOrOptions === "string"
+        ? { configPath: configPathOrOptions }
+        : configPathOrOptions || {};
+
+    const dataDir = resolve(opts.dataDir || process.env.DATA_DIR || "./data");
+    this.configPath = resolve(
+      opts.configPath || process.env.CONFIG_PATH || "./config/hosts.yaml"
+    );
     this.stateMgr = stateMgr;
+    const port = opts.port ?? parseInt(process.env.PORT || "3000", 10);
+    const host = opts.host ?? process.env.HOST ?? "0.0.0.0";
+
     this.appConfig = {
-      port: parseInt(process.env.PORT || "3000", 10),
-      host: process.env.HOST || "0.0.0.0",
-      baseUrl: process.env.BASE_URL || `http://localhost:${process.env.PORT || "3000"}`,
-      ipxeMenuTimeout: parseInt(process.env.IPXE_MENU_TIMEOUT || "5", 10),
+      port,
+      host,
+      baseUrl:
+        opts.baseUrl ??
+        process.env.BASE_URL ??
+        `http://${host === "0.0.0.0" ? "localhost" : host}:${port}`,
+      ipxeMenuTimeout:
+        opts.ipxeMenuTimeout ??
+        parseInt(process.env.IPXE_MENU_TIMEOUT || "5", 10),
       configPath: this.configPath,
+      dataDir,
+      dbPath: resolve(opts.dbPath || process.env.DB_PATH || `${dataDir}/state.db`),
+      assetsDir: resolve(opts.assetsDir || process.env.ASSETS_DIR || "./assets"),
+      logDir: resolve(opts.logDir || process.env.LOG_DIR || "./logs"),
     };
     this.syncFromState();
   }

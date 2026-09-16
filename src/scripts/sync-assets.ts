@@ -26,7 +26,7 @@ const ASSET_SPECS: AssetSpec[] = [
         name: "ubuntu-24.04-live-server-amd64.iso",
         description: "Ubuntu 24.04 Live Server ISO (Single Source of Truth)",
         downloadUrl:
-          "https://releases.ubuntu.com/noble/ubuntu-24.04.1-live-server-amd64.iso",
+          "https://releases.ubuntu.com/noble/ubuntu-24.04.3-live-server-amd64.iso",
         required: true,
       },
       {
@@ -132,6 +132,15 @@ function extractFromIso(isoPath: string, internalPath: string, destPath: string)
         return true;
       }
     }
+
+    // Fallback using 7z if bsdtar is not installed or failed
+    try {
+      const res7z = spawnSync("7z", ["e", "-y", `-o${destDir}`, isoPath, internalPath]);
+      if (res7z.status === 0 && existsSync(destPath)) {
+        return true;
+      }
+    } catch {}
+
     return false;
   } catch (err: any) {
     console.error(`     Extraction failed for ${internalPath}:`, err.message);
@@ -151,32 +160,129 @@ function getKernelInfo(filePath: string): string {
 }
 
 async function downloadFile(url: string, destPath: string): Promise<void> {
-  console.log(`     Downloading from ${url}...`);
-  const res = spawnSync("curl", ["-#", "-fL", "--retry", "3", "--connect-timeout", "30", "-o", destPath, url], {
-    stdio: "inherit",
-  });
-  if (res.status !== 0) {
-    throw new Error(`Failed to download ${url} (curl exit code ${res.status})`);
+  const parentDir = resolve(destPath, "..");
+  if (!existsSync(parentDir)) {
+    mkdirSync(parentDir, { recursive: true });
   }
+  console.log(`     Downloading from ${url}...`);
+  let downloaded = false;
+  try {
+    const res = spawnSync("curl", ["-#", "-fL", "--retry", "3", "--connect-timeout", "30", "-o", destPath, url], {
+      stdio: "inherit",
+    });
+    if (res.status === 0 && existsSync(destPath)) {
+      downloaded = true;
+    }
+  } catch {}
+
+  if (!downloaded) {
+    console.log(`     (Fallback: streaming download via native fetch...)`);
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      throw new Error(`Failed to download ${url} (HTTP ${resp.status} ${resp.statusText})`);
+    }
+    await Bun.write(destPath, resp);
+  }
+
   const stat = statSync(destPath);
   console.log(`     Saved to ${destPath} (${formatBytes(stat.size)})`);
 }
 
-async function main() {
-  const args = process.argv.slice(2);
+export function getMissingAssetsCount(assetsDir?: string, targetOs?: string): { missing: number; total: number; missingFiles: string[] } {
+  const baseDir = assetsDir || process.env.ASSETS_DIR || resolve(process.cwd(), "assets");
+  let missing = 0;
+  let total = 0;
+  const missingFiles: string[] = [];
+
+  for (const spec of ASSET_SPECS) {
+    if (targetOs && spec.os.toLowerCase() !== targetOs.toLowerCase()) {
+      continue;
+    }
+    const dir = resolve(baseDir, spec.os, spec.version);
+    for (const file of spec.files) {
+      if (!file.required) continue;
+      total++;
+      const filePath = join(dir, file.name);
+      if (!existsSync(filePath)) {
+        missing++;
+        missingFiles.push(`${spec.os}/${spec.version}/${file.name}`);
+      }
+    }
+  }
+
+  return { missing, total, missingFiles };
+}
+
+export interface OsAssetSummary {
+  os: string;
+  version: string;
+  ready: boolean;
+  missingCount: number;
+  totalCount: number;
+  files: { name: string; required: boolean; exists: boolean; size?: number }[];
+}
+
+export function getAssetsStatusSummary(assetsDir?: string): Record<string, OsAssetSummary> {
+  const baseDir = assetsDir || process.env.ASSETS_DIR || resolve(process.cwd(), "assets");
+  const result: Record<string, OsAssetSummary> = {};
+
+  for (const spec of ASSET_SPECS) {
+    const dir = resolve(baseDir, spec.os, spec.version);
+    let missingCount = 0;
+    let totalCount = 0;
+    const fileList: { name: string; required: boolean; exists: boolean; size?: number }[] = [];
+
+    for (const file of spec.files) {
+      if (!file.required) continue;
+      totalCount++;
+      const filePath = join(dir, file.name);
+      const exists = existsSync(filePath);
+      let size: number | undefined;
+      if (exists) {
+        try {
+          size = statSync(filePath).size;
+        } catch {}
+      } else {
+        missingCount++;
+      }
+      fileList.push({
+        name: file.name,
+        required: file.required,
+        exists,
+        size,
+      });
+    }
+
+    result[spec.os] = {
+      os: spec.os,
+      version: spec.version,
+      ready: missingCount === 0,
+      missingCount,
+      totalCount,
+      files: fileList,
+    };
+  }
+
+  return result;
+}
+
+export async function runSyncAssets(customArgs?: string[], customAssetsDir?: string) {
+  const args = customArgs || process.argv.slice(2);
   const shouldDownload = args.includes("--download");
   const forceExtract = args.includes("--extract");
   const useHwe = args.includes("--hwe");
   const targetOs = args.find((a) => !a.startsWith("-"));
+  const baseDir = customAssetsDir || process.env.ASSETS_DIR || resolve(process.cwd(), "assets");
 
   console.log(`=== Multi-OS Assets Status & Sync ===\n`);
+  console.log(`Base Assets Directory: ${baseDir}`);
 
   for (const spec of ASSET_SPECS) {
     if (targetOs && spec.os.toLowerCase() !== targetOs.toLowerCase()) {
       continue;
     }
 
-    const dir = resolve(process.cwd(), "assets", spec.os, spec.version);
+    const dir = resolve(baseDir, spec.os, spec.version);
     mkdirSync(dir, { recursive: true });
 
     console.log(`\n📁 [${spec.os.toUpperCase()} ${spec.version}] Directory: ${dir}`);
@@ -259,4 +365,6 @@ Examples:
   }
 }
 
-main().catch(console.error);
+if (import.meta.main) {
+  runSyncAssets().catch(console.error);
+}

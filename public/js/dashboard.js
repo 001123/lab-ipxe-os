@@ -110,6 +110,86 @@
       console.warn('Could not fetch latest /api/config:', err);
     }
     window.openModal('system-config-modal');
+    window.refreshAssetStatus();
+  };
+
+  window.refreshAssetStatus = async function () {
+    const container = document.getElementById('os-assets-list');
+    if (!container) return;
+    container.innerHTML = '<div class="has-text-grey is-size-7 py-2"><span class="icon is-small mr-1">⏳</span>Checking OS boot assets...</div>';
+
+    try {
+      const res = await fetch('/api/assets/status');
+      if (!res.ok) throw new Error('Failed to fetch asset status');
+      const data = await res.json();
+
+      const osNames = {
+        'ubuntu': { title: 'Ubuntu Server', icon: '🐧' },
+        'talos': { title: 'Talos Linux', icon: '⚡' },
+        'suse-micro': { title: 'openSUSE Leap Micro', icon: '🦎' },
+      };
+
+      let html = '';
+      for (const [osKey, info] of Object.entries(data)) {
+        const meta = osNames[osKey] || { title: osKey, icon: '📦' };
+        const isReady = info.ready;
+        const badgeClass = isReady ? 'is-success' : 'is-warning';
+        const badgeText = isReady ? 'Ready' : `Missing (${info.missingCount}/${info.totalCount})`;
+
+        html += `
+          <div class="card p-2 mb-1" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--bulma-border, rgba(255,255,255,0.08)); border-radius: 6px;">
+            <div class="is-flex is-justify-content-space-between is-align-items-center">
+              <div>
+                <span class="mr-1">${meta.icon}</span>
+                <strong class="is-size-7">${meta.title}</strong>
+                <span class="tag is-dark is-rounded is-small ml-1" style="font-size: 0.65rem;">${info.version}</span>
+                <span class="tag ${badgeClass} is-light is-small ml-1" style="font-size: 0.65rem;">${badgeText}</span>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  class="button is-small is-rounded is-outlined ${isReady ? 'is-info' : 'is-primary'}"
+                  style="font-size: 0.7rem; height: 24px; padding: 0 8px;"
+                  onclick="triggerAssetSync('${osKey}', this)"
+                  title="${isReady ? 'Re-sync / re-extract files' : 'Download and extract ISO / kernel'}"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="mr-1"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  ${isReady ? 'Re-sync' : 'Sync'}
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+    } catch (err) {
+      container.innerHTML = `<div class="has-text-danger is-size-7 py-1">Lỗi tải assets: ${err.message}</div>`;
+    }
+  };
+
+  window.triggerAssetSync = async function (osKey, btn) {
+    if (btn) {
+      btn.classList.add('is-loading');
+      btn.disabled = true;
+    }
+    try {
+      const res = await fetch(`/api/assets/sync?os=${encodeURIComponent(osKey)}`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lỗi khi kích hoạt sync');
+      window.showToast(`🚀 Đã kích hoạt tải OS '${osKey}'. Xem tiến độ chi tiết tại Live Terminal.`, 'is-info');
+      // Refresh status after delay
+      setTimeout(() => window.refreshAssetStatus(), 3000);
+    } catch (err) {
+      window.showToast(err.message || 'Lỗi khi đồng bộ asset', 'is-danger');
+    } finally {
+      if (btn) {
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+      }
+    }
   };
 
   window.submitSystemConfigForm = async function (event) {

@@ -1,5 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve, normalize, join } from "node:path";
+import { getEmbeddedAsset } from "../ui/embedded-assets.ts";
 
 const MIME_TYPES: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
@@ -24,6 +25,11 @@ export class StaticAssetServer {
   ) {
     this.baseDir = resolve(baseDir);
     this.routePrefix = routePrefix.replace(/^\/+|\/+$/g, "");
+    if (!existsSync(this.baseDir)) {
+      try {
+        mkdirSync(this.baseDir, { recursive: true });
+      } catch {}
+    }
   }
 
   private getContentType(filePath: string, defaultType: string | null): string {
@@ -47,6 +53,18 @@ export class StaticAssetServer {
     }
 
     if (!existsSync(safePath)) {
+      const embedded = getEmbeddedAsset(subpath);
+      if (embedded) {
+        const bodyBytes = Buffer.byteLength(embedded.content, "utf-8");
+        return new Response(embedded.content, {
+          status: 200,
+          headers: {
+            "Content-Length": bodyBytes.toString(),
+            "Content-Type": embedded.contentType,
+            "Cache-Control": "public, max-age=3600",
+          },
+        });
+      }
       return new Response(`Asset not found: ${subpath}`, { status: 404 });
     }
 

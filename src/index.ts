@@ -8,13 +8,49 @@ import { handleOsConfigRoute } from "./routes/os-configs.ts";
 import { handleApiRoute, buildDashboardData } from "./routes/api.ts";
 import { renderDashboardHtml } from "./ui/dashboard.ts";
 import { logger } from "./core/logger.ts";
+import { parseCli, printHelp } from "./cli.ts";
+import { runSyncAssets, getMissingAssetsCount } from "./scripts/sync-assets.ts";
 
 logger.hookConsole();
 
-const stateMgr = new StateManager();
-const configMgr = new ConfigManager(undefined, stateMgr);
+const isTest = process.env.NODE_ENV === "test" || process.env.PORT === "0";
+const cliConfig = !isTest && import.meta.main ? parseCli() : parseCli([]);
+
+if (import.meta.main) {
+  if (cliConfig.action === "help") {
+    printHelp();
+    process.exit(0);
+  }
+  if (cliConfig.action === "version") {
+    console.log("lab-ipxe-os v1.0.0");
+    process.exit(0);
+  }
+  if (cliConfig.action === "sync-assets") {
+    await runSyncAssets(cliConfig.syncAssetsArgs, cliConfig.assetsDir);
+    process.exit(0);
+  }
+}
+
+const stateMgr = new StateManager(cliConfig.dbPath, cliConfig.configPath, {
+  baseUrl: cliConfig.baseUrl,
+  ipxeMenuTimeout: cliConfig.ipxeMenuTimeout,
+});
+const configMgr = new ConfigManager(
+  {
+    port: cliConfig.port,
+    host: cliConfig.host,
+    baseUrl: cliConfig.baseUrl,
+    configPath: cliConfig.configPath,
+    dataDir: cliConfig.dataDir,
+    dbPath: cliConfig.dbPath,
+    assetsDir: cliConfig.assetsDir,
+    logDir: cliConfig.logDir,
+    ipxeMenuTimeout: cliConfig.ipxeMenuTimeout,
+  },
+  stateMgr
+);
 const registry = new ProviderRegistry();
-const staticServer = new StaticAssetServer();
+const staticServer = new StaticAssetServer(cliConfig.assetsDir, "assets");
 const publicServer = new StaticAssetServer(join(process.cwd(), "public"), "public");
 
 export const server = Bun.serve({
@@ -160,7 +196,8 @@ Useful Endpoints:
   },
 });
 
-console.log(`
+if (import.meta.main) {
+  console.log(`
 ┌─────────────────────────────────────────────────────────────┐
 │  🚀 Bun Multi-OS iPXE & Cloud-Init Server is LIVE           │
 ├─────────────────────────────────────────────────────────────┤
@@ -170,3 +207,55 @@ console.log(`
 │  Providers:     ${registry.getAll().map((p) => p.id).join(", ")}
 └─────────────────────────────────────────────────────────────┘
 `);
+
+  const isTest = process.env.NODE_ENV === "test" || process.env.BUN_ENV === "test";
+  if (cliConfig.action === "server" && cliConfig.autoSync && !isTest) {
+    let targetOses: string[] = [];
+    if (cliConfig.syncOs) {
+      if (cliConfig.syncOs === "all") {
+        targetOses = ["ubuntu", "talos", "suse-micro"];
+      } else if (cliConfig.syncOs === "none") {
+        targetOses = [];
+      } else {
+        targetOses = cliConfig.syncOs
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean);
+      }
+    } else {
+      // Smart Default: only sync default OS and OSes of registered hosts
+      const defaultOs = (stateMgr.getGlobalDefaultConfig().os || "ubuntu").toLowerCase();
+      const hostOses = stateMgr
+        .getAllHosts(false)
+        .map((h) => (h.os || "").toLowerCase())
+        .filter(Boolean);
+      targetOses = Array.from(new Set([defaultOs, ...hostOses]));
+    }
+
+    if (targetOses.length > 0) {
+      console.log(`[Assets] Target OS for startup synchronization: ${targetOses.join(", ")}`);
+      for (const os of targetOses) {
+        const assetStatus = getMissingAssetsCount(cliConfig.assetsDir, os);
+        if (assetStatus.missing > 0) {
+          console.log(`[Assets] ⚠️  [${os.toUpperCase()}] Detected ${assetStatus.missing}/${assetStatus.total} missing required boot assets:`);
+          for (const missingFile of assetStatus.missingFiles) {
+            console.log(`         - ${missingFile}`);
+          }
+          console.log(`[Assets] 🚀 Starting automatic background asset download & extraction for '${os}'...`);
+          (async () => {
+            try {
+              await runSyncAssets(["--download", os], cliConfig.assetsDir);
+              console.log(`[Assets] ✅ Boot assets synchronization complete for '${os}'.\n`);
+            } catch (err: any) {
+              console.error(`[Assets] ❌ Error syncing assets for '${os}':`, err.message);
+            }
+          })();
+        } else {
+          console.log(`[Assets] ✅ [${os.toUpperCase()}] All required boot assets are present in '${cliConfig.assetsDir}'.`);
+        }
+      }
+    } else {
+      console.log(`[Assets] Auto-sync skipped (no target OS specified).`);
+    }
+  }
+}

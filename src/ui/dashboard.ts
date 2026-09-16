@@ -1039,6 +1039,23 @@ export function renderDashboardHtml(context: {
               Countdown delay in seconds before auto-booting local hard disk if no selection is made.
             </p>
           </div>
+
+          <hr class="my-4" style="background-color: var(--bulma-border-weak, rgba(255,255,255,0.08));">
+
+          <div class="field mb-2">
+            <div class="is-flex is-justify-content-space-between is-align-items-center mb-2">
+              <label class="label is-small mb-0">OS Boot Assets (ISOs & Kernels)</label>
+              <button type="button" class="button is-ghost is-small py-0 px-1" onclick="refreshAssetStatus()" title="Refresh asset status">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+              </button>
+            </div>
+            <div id="os-assets-list" class="is-flex is-flex-direction-column" style="gap: 0.5rem;">
+              <div class="has-text-grey is-size-7 py-1">Loading OS boot assets...</div>
+            </div>
+            <p class="help is-size-7 has-text-grey mt-2">
+              Click <strong>Sync</strong> to download and extract OS boot images on-demand without restarting. Progress streams into Live Terminal.
+            </p>
+          </div>
         </section>
         <footer class="modal-card-foot is-justify-content-flex-end">
           <button class="button is-small" type="button" onclick="closeModal('system-config-modal')">Cancel</button>

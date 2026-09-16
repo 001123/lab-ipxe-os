@@ -10,6 +10,7 @@ RUN bun install --production --frozen-lockfile || bun install --production
 
 # Copy application source code
 COPY src/ ./src
+COPY public/ ./public
 COPY tsconfig.json ./
 
 # Create mount points

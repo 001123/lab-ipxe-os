@@ -359,7 +359,8 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(res.headers.get("content-type")).toContain("text/html");
       const html = await res.text();
       expect(html).toContain("stat-box");
-      expect(html).toContain("Total Nodes");
+      expect(html).toContain('data-stat="total"');
+      expect(html).toContain("All");
       expect(html).toContain("Installed");
       expect(html).toContain("Provisioning");
       expect(html).toContain("Pending");

@@ -7,6 +7,10 @@ import {
   renderStatsGridPartial,
   type DashboardHostItem,
 } from "../ui/dashboard.ts";
+import {
+  getAssetsStatusSummary,
+  runSyncAssets,
+} from "../scripts/sync-assets.ts";
 
 export function buildDashboardData(configMgr: ConfigManager, stateMgr: StateManager) {
   const allHosts = stateMgr.getAllHosts();
@@ -80,6 +84,56 @@ export async function handleApiRoute(
   const url = new URL(req.url);
   const method = req.method.toUpperCase();
   const isHtmx = req.headers.get("hx-request") === "true" || req.headers.get("HX-Request") === "true";
+
+  // =========================================================================
+  // 0. OS Boot Assets Management Endpoints (/api/assets)
+  // =========================================================================
+
+  // GET /api/assets/status
+  if (pathname === "/api/assets/status" && method === "GET") {
+    const summary = getAssetsStatusSummary(configMgr.appConfig.assetsDir);
+    return new Response(JSON.stringify(summary, null, 2), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // POST /api/assets/sync
+  if (pathname === "/api/assets/sync" && method === "POST") {
+    let targetOs = url.searchParams.get("os") || "ubuntu";
+    if (req.headers.get("content-type")?.includes("application/json")) {
+      try {
+        const body = await req.json();
+        if (body.os) targetOs = body.os;
+      } catch {}
+    }
+
+    const cleanOs = targetOs.trim().toLowerCase();
+    const assetsDir = configMgr.appConfig.assetsDir;
+
+    console.log(`[API] Triggered manual on-demand asset sync for OS: '${cleanOs}'`);
+    (async () => {
+      try {
+        const args = cleanOs === "all" ? ["--download"] : ["--download", cleanOs];
+        await runSyncAssets(args, assetsDir);
+        console.log(`[API] ✅ Asset sync completed for OS: '${cleanOs}'`);
+      } catch (err: any) {
+        console.error(`[API] ❌ Asset sync failed for OS '${cleanOs}':`, err.message);
+      }
+    })();
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `Asset download & extraction started for OS '${cleanOs}'. Check live terminal for progress.`,
+        os: cleanOs,
+      }),
+      {
+        status: 202,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
 
   // =========================================================================
   // 1. Full CRUD Host Endpoints (/api/hosts)

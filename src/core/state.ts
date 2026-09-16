@@ -21,11 +21,15 @@ export class StateManager {
   private db: Database;
   private yamlSeedPath: string;
 
-  constructor(filePath: string = join(process.cwd(), "data", "state.db")) {
-    if (filePath.endsWith(".json")) {
-      this.dbPath = filePath.replace(/\.json$/, ".db");
+  constructor(filePath?: string, yamlSeedPath?: string, defaultSystemConfig?: Partial<SystemConfig>) {
+    const defaultDataDir = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(process.cwd(), "data");
+    const defaultDbPath = process.env.DB_PATH ? resolve(process.env.DB_PATH) : join(defaultDataDir, "state.db");
+    const targetPath = filePath || defaultDbPath;
+
+    if (targetPath.endsWith(".json")) {
+      this.dbPath = targetPath.replace(/\.json$/, ".db");
     } else {
-      this.dbPath = filePath;
+      this.dbPath = targetPath;
     }
 
     const dir = dirname(this.dbPath);
@@ -33,9 +37,9 @@ export class StateManager {
       mkdirSync(dir, { recursive: true });
     }
 
-    this.yamlSeedPath = resolve(process.env.CONFIG_PATH || "./config/hosts.yaml");
+    this.yamlSeedPath = resolve(yamlSeedPath || process.env.CONFIG_PATH || "./config/hosts.yaml");
     this.db = new Database(this.dbPath);
-    this.initDb();
+    this.initDb(defaultSystemConfig);
   }
 
   public normalizeMac(mac: string): string {
@@ -55,7 +59,7 @@ export class StateManager {
     return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(clean);
   }
 
-  private initDb(): void {
+  private initDb(defaultSystemConfig?: Partial<SystemConfig>): void {
     try {
       this.db.run("PRAGMA journal_mode = WAL;");
       this.db.run("PRAGMA busy_timeout = 5000;");
@@ -113,8 +117,8 @@ export class StateManager {
       const sysConfigRow = this.db.prepare("SELECT count(*) as count FROM global_config WHERE key = 'system_config'").get() as { count: number };
       if (sysConfigRow.count === 0) {
         const defaultPort = process.env.PORT || "3000";
-        const defaultBaseUrl = process.env.BASE_URL || `http://localhost:${defaultPort}`;
-        const defaultTimeout = parseInt(process.env.IPXE_MENU_TIMEOUT || "5", 10);
+        const defaultBaseUrl = defaultSystemConfig?.baseUrl || process.env.BASE_URL || `http://localhost:${defaultPort}`;
+        const defaultTimeout = defaultSystemConfig?.ipxeMenuTimeout ?? parseInt(process.env.IPXE_MENU_TIMEOUT || "5", 10);
         this.saveSystemConfig({
           baseUrl: defaultBaseUrl,
           ipxeMenuTimeout: Number.isNaN(defaultTimeout) ? 5 : defaultTimeout,
