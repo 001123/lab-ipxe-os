@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
-export default defineConfig({
+export default withMermaid(
+  defineConfig({
   title: 'lab-ipxe-os',
   description: 'Multi-OS iPXE & Cloud-Init Autoinstall Server powered by Bun and TypeScript',
   base: '/lab-ipxe-os/',
@@ -85,4 +87,4 @@ export default defineConfig({
       next: 'Trang tiếp theo'
     }
   }
-})
+}))
