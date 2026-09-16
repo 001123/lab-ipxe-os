@@ -340,7 +340,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(res.headers.get("content-type")).toContain("image/svg+xml");
       const svg = await res.text();
       expect(svg).toContain("<svg");
-      expect(svg).toContain("orangeStream");
+      expect(svg).toContain("orangeIGrad");
     });
 
     it("GET /public/favicon.ico and direct GET /favicon.ico should serve valid ICO", async () => {
