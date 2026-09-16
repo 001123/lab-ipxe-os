@@ -82,10 +82,10 @@ const ASSET_SPECS: AssetSpec[] = [
       },
       {
         name: "vmlinuz",
-        description: "openSUSE Leap Micro 6.2 Kernel (Extracted from openSUSE-Leap-Micro.x86_64-6.2.kernel)",
+        description: "openSUSE Leap Micro 6.2 Kernel (Extracted from pxeboot.openSUSE-Leap-Micro.x86_64-6.2.kernel)",
         required: true,
         extractedFromIso: {
-          sourceFile: "openSUSE-Leap-Micro.x86_64-6.2.kernel",
+          sourceFile: "pxeboot.openSUSE-Leap-Micro.x86_64-6.2.kernel",
         },
       },
       {
@@ -123,11 +123,16 @@ function extractFromIso(isoPath: string, internalPath: string, destPath: string)
     if (res.status === 0) {
       const extractedPath = join(destDir, internalPath);
       if (existsSync(extractedPath)) {
-        renameSync(extractedPath, destPath);
-        const topDir = internalPath.split("/")[0];
-        const dirToRemove = join(destDir, topDir);
-        if (existsSync(dirToRemove) && dirToRemove !== destDir) {
-          rmSync(dirToRemove, { recursive: true, force: true });
+        if (resolve(extractedPath) !== resolve(destPath)) {
+          renameSync(extractedPath, destPath);
+          const parts = internalPath.split("/");
+          if (parts.length > 1) {
+            const topDir = parts[0];
+            const dirToRemove = join(destDir, topDir);
+            if (existsSync(dirToRemove) && dirToRemove !== destDir) {
+              rmSync(dirToRemove, { recursive: true, force: true });
+            }
+          }
         }
         return true;
       }
@@ -138,6 +143,20 @@ function extractFromIso(isoPath: string, internalPath: string, destPath: string)
       const res7z = spawnSync("7z", ["e", "-y", `-o${destDir}`, isoPath, internalPath]);
       if (res7z.status === 0 && existsSync(destPath)) {
         return true;
+      }
+    } catch {}
+
+    // Fallback using standard tar if it's a tar archive
+    try {
+      const resTar = spawnSync("tar", ["-xf", isoPath, "-C", destDir, internalPath]);
+      if (resTar.status === 0) {
+        const extractedPath = join(destDir, internalPath);
+        if (existsSync(extractedPath)) {
+          if (resolve(extractedPath) !== resolve(destPath)) {
+            renameSync(extractedPath, destPath);
+          }
+          return true;
+        }
       }
     } catch {}
 

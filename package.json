@@ -9,6 +9,8 @@
     "test": "PORT=0 bun test",
     "sync-assets": "bun src/scripts/sync-assets.ts",
     "proxmox:create": "bun proxmox/create-vm.ts",
+    "proxmox:create-lxc": "bun proxmox/create-lxc.ts",
+    "proxmox:deploy-lxc": "bash proxmox/deploy-lxc.sh",
     "build": "bun build --compile --minify src/index.ts --outfile dist/lab-ipxe-os",
     "build:linux-x64": "bun build --compile --minify --target=bun-linux-x64 src/index.ts --outfile dist/lab-ipxe-os-linux-x64",
     "build:linux-arm64": "bun build --compile --minify --target=bun-linux-arm64 src/index.ts --outfile dist/lab-ipxe-os-linux-arm64",

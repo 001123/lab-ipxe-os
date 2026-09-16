@@ -77,6 +77,7 @@ export const server = Bun.serve({
     // 1. iPXE Boot Script Routes
     if (
       pathname === "/boot.ipxe" ||
+      pathname === "/ipxe/boot.ipxe" ||
       pathname === "/chain" ||
       pathname === "/ipxe"
     ) {
