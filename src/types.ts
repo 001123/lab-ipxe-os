@@ -111,3 +111,8 @@ export interface ImportYamlResult {
   errors?: string[];
 }
 
+export interface SystemConfig {
+  baseUrl: string;
+  ipxeMenuTimeout: number;
+}
+

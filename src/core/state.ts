@@ -13,6 +13,7 @@ import type {
   HostsFileStructure,
   ImportYamlOptions,
   ImportYamlResult,
+  SystemConfig,
 } from "../types.ts";
 
 export class StateManager {
@@ -106,6 +107,18 @@ export class StateManager {
       const countRow = this.db.prepare("SELECT count(*) as count FROM hosts").get() as { count: number };
       if (countRow.count === 0) {
         this.seedFromYaml();
+      }
+
+      // Ensure system config is initialized in global_config
+      const sysConfigRow = this.db.prepare("SELECT count(*) as count FROM global_config WHERE key = 'system_config'").get() as { count: number };
+      if (sysConfigRow.count === 0) {
+        const defaultPort = process.env.PORT || "3000";
+        const defaultBaseUrl = process.env.BASE_URL || `http://localhost:${defaultPort}`;
+        const defaultTimeout = parseInt(process.env.IPXE_MENU_TIMEOUT || "5", 10);
+        this.saveSystemConfig({
+          baseUrl: defaultBaseUrl,
+          ipxeMenuTimeout: Number.isNaN(defaultTimeout) ? 5 : defaultTimeout,
+        });
       }
     } catch (err) {
       console.error(`[State] Error initializing database at ${this.dbPath}:`, err);
@@ -236,6 +249,37 @@ export class StateManager {
     this.db.prepare(`
       INSERT INTO global_config (key, value_json, updated_at)
       VALUES ('default_host_config', $json, datetime('now'))
+      ON CONFLICT(key) DO UPDATE SET
+        value_json = excluded.value_json,
+        updated_at = datetime('now')
+    `).run({ $json: json });
+  }
+
+  // --- System Configuration (Base URL & iPXE Menu Timeout) ---
+
+  public getSystemConfig(): SystemConfig | null {
+    try {
+      const row = this.db.prepare("SELECT value_json FROM global_config WHERE key = 'system_config'").get() as any;
+      if (row?.value_json) {
+        const parsed = JSON.parse(row.value_json);
+        if (parsed && typeof parsed.baseUrl === "string" && typeof parsed.ipxeMenuTimeout === "number") {
+          return parsed as SystemConfig;
+        }
+      }
+    } catch (err) {
+      console.error("[State] Error reading system config:", err);
+    }
+    return null;
+  }
+
+  public saveSystemConfig(config: SystemConfig): void {
+    const json = JSON.stringify({
+      baseUrl: config.baseUrl.replace(/\/+$/, ""),
+      ipxeMenuTimeout: Math.max(0, Math.floor(config.ipxeMenuTimeout)),
+    });
+    this.db.prepare(`
+      INSERT INTO global_config (key, value_json, updated_at)
+      VALUES ('system_config', $json, datetime('now'))
       ON CONFLICT(key) DO UPDATE SET
         value_json = excluded.value_json,
         updated_at = datetime('now')

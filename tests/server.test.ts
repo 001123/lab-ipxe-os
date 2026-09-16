@@ -305,12 +305,12 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
       const html = await res.text();
-      expect(html).toContain("iPXE Autoinstall Hub");
+      expect(html).toContain("iPXE Hub");
       expect(html).toContain("bulma@1.0.4");
       expect(html).toContain("htmx.org@4.0.0");
       expect(html).toContain("/public/css/dashboard.css");
       expect(html).toContain("/public/js/dashboard.js");
-      expect(html).toContain("Managed Nodes");
+      expect(html).toContain("grid-search-input");
       expect(html).toContain("Auto-polling");
       expect(html).toContain("k3s-single-node");
     });

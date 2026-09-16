@@ -7,6 +7,9 @@ import { handleIpxeRoute } from "./routes/ipxe.ts";
 import { handleOsConfigRoute } from "./routes/os-configs.ts";
 import { handleApiRoute, buildDashboardData } from "./routes/api.ts";
 import { renderDashboardHtml } from "./ui/dashboard.ts";
+import { logger } from "./core/logger.ts";
+
+logger.hookConsole();
 
 const stateMgr = new StateManager();
 const configMgr = new ConfigManager(undefined, stateMgr);
@@ -58,6 +61,35 @@ export const server = Bun.serve({
       return await handleOsConfigRoute(req, pathname, configMgr, registry, stateMgr);
     }
 
+    // WebSocket endpoint for Live Console Logs
+    if (pathname === "/ws/logs") {
+      const upgraded = serverInstance.upgrade(req);
+      if (upgraded) {
+        return undefined as any;
+      }
+      return new Response("WebSocket upgrade failed", { status: 400 });
+    }
+
+    // Log download and purge API endpoints
+    if (pathname === "/api/logs/download") {
+      const logPath = logger.getLogFilePath();
+      const file = Bun.file(logPath);
+      return new Response(file, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="server.log"',
+        },
+      });
+    }
+
+    if (pathname === "/api/logs" && req.method === "DELETE") {
+      const res = logger.purgeLogs();
+      return new Response(JSON.stringify(res), {
+        status: res.success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // 4. Management & Webhook API Routes
     if (pathname.startsWith("/api/") || pathname.startsWith("/ui/")) {
       return await handleApiRoute(req, pathname, configMgr, stateMgr, serverInstance);
@@ -98,6 +130,7 @@ Useful Endpoints:
 - Update Note API:     ${configMgr.appConfig.baseUrl}/api/note
 - Phone-Home Webhook: ${configMgr.appConfig.baseUrl}/api/installed?mac=<MAC>
 - Kubeconfig API:     ${configMgr.appConfig.baseUrl}/api/kubeconfig/<hostname|MAC>
+- Live Console WS:    ${configMgr.appConfig.baseUrl.replace("http", "ws")}/ws/logs
 `,
         {
           status: 200,
@@ -107,6 +140,23 @@ Useful Endpoints:
     }
 
     return new Response("Not Found", { status: 404 });
+  },
+
+  websocket: {
+    open(ws: any) {
+      logger.subscribe(ws);
+    },
+    message(ws: any, message: any) {
+      try {
+        const data = JSON.parse(String(message));
+        if (data.action === "purge") {
+          logger.purgeLogs();
+        }
+      } catch {}
+    },
+    close(ws: any) {
+      logger.unsubscribe(ws);
+    },
   },
 });
 

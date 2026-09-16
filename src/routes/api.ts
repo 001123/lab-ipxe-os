@@ -569,6 +569,121 @@ export async function handleApiRoute(
   }
 
   // =========================================================================
+  // 2b. System Configuration Endpoints (/api/config)
+  // =========================================================================
+
+  // GET /api/config
+  if (pathname === "/api/config" && method === "GET") {
+    return new Response(
+      JSON.stringify(
+        {
+          baseUrl: configMgr.appConfig.baseUrl,
+          ipxeMenuTimeout: configMgr.appConfig.ipxeMenuTimeout,
+        },
+        null,
+        2
+      ),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  // POST /api/config
+  if (pathname === "/api/config" && method === "POST") {
+    let bodyData: any = {};
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      try {
+        bodyData = await req.json();
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    } else if (
+      contentType.includes("application/x-www-form-urlencoded") ||
+      contentType.includes("multipart/form-data")
+    ) {
+      try {
+        const formData = await req.formData();
+        formData.forEach((val, key) => {
+          bodyData[key] = val.toString();
+        });
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid form data." }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    const rawBaseUrl = (bodyData.baseUrl ?? url.searchParams.get("baseUrl") ?? "").toString().trim();
+    const rawTimeout = bodyData.ipxeMenuTimeout ?? url.searchParams.get("ipxeMenuTimeout");
+
+    const updates: Partial<{ baseUrl: string; ipxeMenuTimeout: number }> = {};
+
+    if (rawBaseUrl) {
+      if (!rawBaseUrl.startsWith("http://") && !rawBaseUrl.startsWith("https://")) {
+        return new Response(
+          JSON.stringify({ error: "Base URL must start with http:// or https://" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      try {
+        new URL(rawBaseUrl);
+      } catch {
+        return new Response(
+          JSON.stringify({ error: "Base URL is not a valid URL format" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      updates.baseUrl = rawBaseUrl.replace(/\/+$/, "");
+    }
+
+    if (rawTimeout !== undefined && rawTimeout !== null && rawTimeout !== "") {
+      const parsed = parseInt(rawTimeout.toString(), 10);
+      if (Number.isNaN(parsed) || parsed < 0 || parsed > 3600) {
+        return new Response(
+          JSON.stringify({ error: "Timeout must be an integer between 0 and 3600 seconds" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      updates.ipxeMenuTimeout = parsed;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return new Response(
+        JSON.stringify({ error: "No valid configuration fields provided (baseUrl or ipxeMenuTimeout required)" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const updated = configMgr.updateSystemConfig(updates);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "System configuration saved successfully",
+        config: {
+          baseUrl: updated.baseUrl,
+          ipxeMenuTimeout: updated.ipxeMenuTimeout,
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...(isHtmx ? { "HX-Trigger": "refreshConfig" } : {}),
+        },
+      }
+    );
+  }
+
+  // =========================================================================
   // 3. Status & Reset Endpoints
   // =========================================================================
 

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import YAML from "yaml";
-import type { HostConfig, HostsFileStructure } from "./types.ts";
+import type { HostConfig, HostsFileStructure, SystemConfig } from "./types.ts";
 import type { StateManager } from "./core/state.ts";
 
 export interface AppConfig {
@@ -27,10 +27,44 @@ export class ConfigManager {
       ipxeMenuTimeout: parseInt(process.env.IPXE_MENU_TIMEOUT || "5", 10),
       configPath: this.configPath,
     };
+    this.syncFromState();
   }
 
   public attachStateManager(stateMgr: StateManager): void {
     this.stateMgr = stateMgr;
+    this.syncFromState();
+  }
+
+  public syncFromState(): void {
+    if (this.stateMgr) {
+      const sysConfig = this.stateMgr.getSystemConfig();
+      if (sysConfig) {
+        if (sysConfig.baseUrl) {
+          this.appConfig.baseUrl = sysConfig.baseUrl.replace(/\/+$/, "");
+        }
+        if (typeof sysConfig.ipxeMenuTimeout === "number" && !Number.isNaN(sysConfig.ipxeMenuTimeout)) {
+          this.appConfig.ipxeMenuTimeout = sysConfig.ipxeMenuTimeout;
+        }
+      }
+    }
+  }
+
+  public updateSystemConfig(updates: Partial<SystemConfig>): AppConfig {
+    if (updates.baseUrl) {
+      this.appConfig.baseUrl = updates.baseUrl.trim().replace(/\/+$/, "");
+    }
+    if (typeof updates.ipxeMenuTimeout === "number" && !Number.isNaN(updates.ipxeMenuTimeout)) {
+      this.appConfig.ipxeMenuTimeout = Math.max(0, Math.floor(updates.ipxeMenuTimeout));
+    }
+
+    if (this.stateMgr) {
+      this.stateMgr.saveSystemConfig({
+        baseUrl: this.appConfig.baseUrl,
+        ipxeMenuTimeout: this.appConfig.ipxeMenuTimeout,
+      });
+    }
+
+    return this.appConfig;
   }
 
   public normalizeMac(mac: string): string {
