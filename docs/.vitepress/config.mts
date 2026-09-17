@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitepress'
-import { withMermaid } from 'vitepress-plugin-mermaid'
+import { withMermaid } from 'vitepress-mermaid-viewer'
 
 export default withMermaid(
   defineConfig({
