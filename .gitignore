@@ -26,6 +26,8 @@ assets/**/*
 # System & IDE
 .DS_Store
 *.log
+*.tsbuildinfo
 dist/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+

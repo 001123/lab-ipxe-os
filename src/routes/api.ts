@@ -106,8 +106,8 @@ export async function handleApiRoute(
     let targetOs = url.searchParams.get("os") || "ubuntu";
     if (req.headers.get("content-type")?.includes("application/json")) {
       try {
-        const body = await req.json();
-        if (body.os) targetOs = body.os;
+        const body = (await req.json()) as { os?: string } | null;
+        if (body?.os) targetOs = body.os;
       } catch {}
     }
 
@@ -583,7 +583,7 @@ export async function handleApiRoute(
           : true;
         resetStatus = formData.get("resetStatus") === "true" || formData.get("resetStatus") === "1";
       } else if (contentType.includes("application/json")) {
-        const body = await req.json().catch(() => ({}));
+        const body = (await req.json().catch(() => ({}))) as any;
         yamlContent = body.yaml || body.content || "";
         if (body.replaceAll !== undefined) replaceAll = Boolean(body.replaceAll);
         if (body.updateDefaults !== undefined) updateDefaults = Boolean(body.updateDefaults);

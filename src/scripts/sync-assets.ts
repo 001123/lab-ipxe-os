@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, statSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, renameSync, rmSync, copyFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
