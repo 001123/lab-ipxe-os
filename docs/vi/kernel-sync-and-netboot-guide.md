@@ -263,3 +263,32 @@ Khi gặp bất kỳ sự cố máy tính dừng ở màn hình Kernel Panic ho�
 - [ ] **3. Kiểm tra tham số `ramdisk_size`**: Có đủ lớn (`ramdisk_size=3500000`) để giải nén toàn bộ initramfs không?
 - [ ] **4. Kiểm tra dòng lệnh Kernel trong UEFI**: Đã loại bỏ chuỗi `initrd=initrd` để tránh xung đột với EFI Stub chưa?
 - [ ] **5. Kiểm tra quyền truy cập NFS / HTTP**: Từ một máy tính khác trong mạng, thử `curl -I http://192.168.250.202:3000/assets/ubuntu/24.04/vmlinuz` và kiểm tra showmount NFS `showmount -e 192.168.250.4`.
+
+---
+
+## 8. Assets Proxmox VE 9.2: Sinh Bằng Assistant (Không Bóc ISO Thủ Công)
+
+Khác với Ubuntu/SUSE, kernel và initrd của Proxmox VE **không bóc trực tiếp từ ISO gốc** mà phải sinh bằng công cụ chính chủ `proxmox-auto-install-assistant` (cặp file này đã nhúng sẵn cấu hình trỏ về `/os/proxmox/answer` của server):
+
+```bash
+apt install proxmox-auto-install-assistant xorriso
+
+proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+  --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
+  --pxe --pxe-loader ipxe --output ./proxmox-pxe/
+
+mkdir -p assets/proxmox/9.2
+cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
+```
+
+Kiểm tra nhanh:
+
+```bash
+curl -I http://192.168.250.202:3000/assets/proxmox/9.2/vmlinuz
+curl -I http://192.168.250.202:3000/assets/proxmox/9.2/initrd.img
+# Render thử answer cho 1 node (không cần installer thật):
+curl "http://192.168.250.202:3000/os/proxmox/answer?mac=bc:24:11:00:24:40"
+```
+
+> [!NOTE]
+> Vì cặp `vmlinuz`/`initrd.img` đã gắn chặt với URL answer lúc chạy `prepare-iso`, nếu đổi `baseUrl` của server thì phải chạy lại lệnh trên và chép đè assets.

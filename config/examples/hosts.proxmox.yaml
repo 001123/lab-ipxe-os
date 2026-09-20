@@ -1,0 +1,72 @@
+# ==============================================================================
+# Proxmox VE Configuration Example (Automated Installation + iPXE)
+# ==============================================================================
+# Hướng dẫn sử dụng:
+# Copy nội dung hoặc toàn bộ file này vào config/hosts.yaml:
+#   cp config/examples/hosts.proxmox.yaml config/hosts.yaml
+#
+# Chuẩn bị boot assets MỘT LẦN trên máy admin (cần ISO Proxmox VE 9.2):
+#   proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+#     --fetch-from http --url "http://<BASE_URL>/os/proxmox/answer" \
+#     --pxe --pxe-loader ipxe --output ./proxmox-pxe/
+#   mkdir -p assets/proxmox/9.2
+#   cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
+# ==============================================================================
+
+# Default profile áp dụng cho các node Proxmox VE chưa đăng ký MAC
+default:
+  os: proxmox
+  version: "9.2"
+  profile: generic
+  # BẮT BUỘC đổi: hash mật khẩu SHA-512 cho user root (tạo bằng `mkpasswd -m sha-512`)
+  password_hash: "$6$rounds=4096$homelab$REPLACE_WITH_YOUR_OWN_HASH"
+  ssh_authorized_keys:
+    - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLEKEYPLACEHOLDER00000000000000000000000 user@homelab.local"
+  storage:
+    target_disk: "/dev/sda"
+  network:
+    dhcp: true
+
+# Danh sách node Proxmox VE
+hosts:
+  # ----------------------------------------------------------------------------
+  # 1. Proxmox VE Node DHCP (đơn giản nhất, dùng NIC đang boot)
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:24:40":
+    hostname: "pve-01"
+    note: "Proxmox VE 9.2 cài đặt tự động qua DHCP lên đĩa /dev/sda"
+    os: proxmox
+    version: "9.2"
+    profile: generic
+    network:
+      dhcp: true
+    storage:
+      target_disk: "/dev/sda"
+    force_install: false
+
+  # ----------------------------------------------------------------------------
+  # 2. Proxmox VE Node Static IP + ZFS Mirror
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:24:41":
+    hostname: "pve-02"
+    note: "Proxmox VE 9.2 IP tĩnh, ZFS mirror trên sda/sdb"
+    os: proxmox
+    version: "9.2"
+    profile: generic
+    custom:
+      filesystem: "zfs"
+      zfs_raid: "raid1"
+      timezone: "Asia/Ho_Chi_Minh"
+      keyboard: "en-us"
+      country: "vn"
+      mailto: "admin@example.com"
+      domain: "homelab.local"
+    network:
+      dhcp: false
+      ip: "192.168.250.41"
+      netmask: "255.255.255.0"
+      gateway: "192.168.250.1"
+      nameservers: ["192.168.250.1", "1.1.1.1"]
+    storage:
+      target_disk: "/dev/sda"
+    force_install: false

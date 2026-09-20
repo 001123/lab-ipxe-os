@@ -1,6 +1,6 @@
 # Động Cơ Cài Đặt Hệ Điều Hành (OS Provisioning Engines)
 
-Tài liệu này giải thích chi tiết cơ chế hoạt động bên trong của các động cơ cài đặt hệ điều hành tự động (**Automated OS Engines**) được tích hợp trong dự án: **Ubuntu Server 24.04 (Subiquity / Cloud-Init)**, **Talos Linux (MachineConfig)**, và **openSUSE Leap Micro (Combustion)**. Đồng thời, tài liệu cung cấp hướng dẫn mở rộng để lập trình viên tự thêm các bản phân phối Linux mới vào hệ thống.
+Tài liệu này giải thích chi tiết cơ chế hoạt động bên trong của các động cơ cài đặt hệ điều hành tự động (**Automated OS Engines**) được tích hợp trong dự án: **Ubuntu Server 24.04 (Subiquity / Cloud-Init)**, **Talos Linux (MachineConfig)**, **openSUSE Leap Micro (Combustion)**, và **Proxmox VE 9.2 (Automated Installation)**. Đồng thời, tài liệu cung cấp hướng dẫn mở rộng để lập trình viên tự thêm các bản phân phối Linux mới vào hệ thống.
 
 ---
 
@@ -220,7 +220,63 @@ Hệ thống hỗ trợ 2 profile cho openSUSE Leap Micro qua thư mục [`src/p
 
 ---
 
-## 4. Mô Hình Kiến Trúc 2 Tầng Registry: Provider Registry & Profile Registry Map
+## 4. Proxmox VE 9.2: Cài Đặt Tự Động qua PXE + HTTP Answer
+
+Proxmox VE từ 8.2 trở đi tích hợp **bộ cài tự động** điều khiển bằng file TOML gọi là **answer file**. Khác với Ubuntu/Talos/SUSE, cặp boot assets (`vmlinuz` + `initrd.img`) không thể bóc trực tiếp từ ISO gốc — phải sinh một lần bằng công cụ chính chủ, sau đó mỗi installer sẽ tải answer riêng của từng máy từ server qua HTTP.
+
+### 4.1. Chuẩn Bị PXE Assets Một Lần (Máy Admin)
+
+```bash
+# 1. Cài công cụ assistant (máy admin Debian/PVE)
+apt install proxmox-auto-install-assistant xorriso
+
+# 2. Tách image đã chuẩn bị thành file boot PXE, gắn sẵn URL của server
+proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+  --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
+  --pxe --pxe-loader ipxe --output ./proxmox-pxe/
+
+# 3. Chép kết quả vào asset mirror (Single Source of Truth)
+mkdir -p assets/proxmox/9.2
+cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
+```
+
+### 4.2. Tham Số Boot iPXE
+
+Định nghĩa tại [src/providers/proxmox/ipxe.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/proxmox/ipxe.ts):
+
+```ipxe
+kernel ${base_url}/assets/proxmox/9.2/vmlinuz initrd=initrd.img ramdisk_size=16777216 rw quiet splash=silent proxmox-start-auto-installer
+initrd ${base_url}/assets/proxmox/9.2/initrd.img
+boot
+```
+
+`proxmox-start-auto-installer` là bắt buộc — thiếu nó ISO sẽ boot vào trình cài tương tác. Lưu ý `initrd=initrd.img` ở đây là tên initrd đã đăng ký với iPXE (init script của Proxmox yêu cầu, khác trường hợp UEFI của Ubuntu).
+
+### 4.3. Luồng Answer Động (`POST /os/proxmox/answer`)
+
+```mermaid
+sequenceDiagram
+    participant Inst as PVE auto-installer
+    participant Srv as Bun server
+    Inst->>Srv: POST /os/proxmox/answer (JSON system-info kèm MAC)
+    Srv->>Srv: Đối chiếu MAC NIC với host đã đăng ký
+    Srv-->>Inst: answer.toml (kebab-case, TOML)
+    Inst->>Inst: Cài đặt không giám sát, rồi first boot
+    Inst->>Srv: GET /os/proxmox/:mac/first-boot.sh + POST /api/installed
+```
+
+Điểm chính của cài đặt ([src/providers/proxmox/answer.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/proxmox/answer.ts), route tại [src/routes/os-configs.ts](file:///Users/timi/lab/lab-ipxe-os/src/routes/os-configs.ts)):
+
+- **Một URL chung, nội dung theo từng máy**: `--url` nhúng trong file PXE giống nhau cho mọi node. Server đọc body POST của installer (`mac_addresses[]` / `network_interfaces[].mac`) và render answer của host khớp; phần cứng lạ dùng profile `default:` chung (`homelab-xxxxxx`).
+- **Chỉ dùng kebab-case**: PVE 9.x từ chối key `snake_case` cũ, nên generator sinh `root-password-hashed`, `disk-list`, `from-dhcp`, `zfs.raid`, ...
+- **Các section**: `[global]` (fqdn, keyboard/country/timezone/mailto, `root-password-hashed` từ `password_hash`, `root-ssh-keys`), `[network]` (`from-dhcp` hoặc `from-answer` với CIDR/gateway/dns từ `hosts.yaml`), `[disk-setup]` (`filesystem` mặc định `ext4`, đĩa từ `storage.target_disk`, `zfs.raid`), `[first-boot]` (`source = "from-url"` trỏ tới hook theo MAC, hook này curl `/api/installed` để chuyển node sang `INSTALLED` và thoát vòng lặp cài lại).
+- **Debug**: `GET /os/proxmox/answer?mac=<MAC>` render đúng answer đó mà không cần installer POST; kiểm tra answer bằng `proxmox-auto-install-assistant validate-answer answer.toml`.
+
+File cấu hình mẫu: [config/examples/hosts.proxmox.yaml](file:///Users/timi/lab/lab-ipxe-os/config/examples/hosts.proxmox.yaml).
+
+---
+
+## 5. Mô Hình Kiến Trúc 2 Tầng Registry: Provider Registry & Profile Registry Map
 
 Hệ thống được thiết kế theo nguyên lý **Separation of Concerns** và **Open-Closed Principle (OCP)** thông qua mô hình Registry 2 tầng:
 
@@ -231,6 +287,7 @@ flowchart TD
         PR -->|"os: 'ubuntu'"| UP["UbuntuProvider"]
         PR -->|"os: 'talos'"| TP["TalosProvider"]
         PR -->|"os: 'suse-micro'"| SP["SuseMicroProvider"]
+        PR -->|"os: 'proxmox'"| PP["ProxmoxProvider"]
     end
 
     subgraph Tier2 ["Tầng 2: Workload Profile Registry Map (src/providers/<os>/profiles/)"]
@@ -244,7 +301,7 @@ flowchart TD
     end
 ```
 
-### 4.1. Tại sao sử dụng Registry Map thay vì Switch-Case?
+### 5.1. Tại sao sử dụng Registry Map thay vì Switch-Case?
 
 | Tiêu Chí | Switch-Case Trước Đây | Registry Map Hiện Tại |
 | :--- | :--- | :--- |
@@ -254,9 +311,9 @@ flowchart TD
 | **Độ tin cậy & Fallback** | Dễ sót nhánh default hoặc xử lý hoa/thường không đồng nhất. | Luôn chuẩn hóa `.toLowerCase()` và fallback có cảnh báo `console.warn` về profile `generic`. |
 | **Độ nhất quán (Consistency)** | Mỗi OS một kiểu viết (Ubuntu kiểu khác, SUSE kiểu khác). | Toàn bộ các Provider đều đồng bộ theo cùng 1 chuẩn cấu trúc module. |
 
-### 4.2. Cấu Trúc Module Chuẩn Của Một Thư Mục Profile
+### 5.2. Cấu Trúc Module Chuẩn Của Một Thư Mục Profile
 
-Cả `src/providers/ubuntu/profiles/` và `src/providers/suse-micro/profiles/` đều tuân theo cấu trúc 4 thành phần:
+`src/providers/ubuntu/profiles/`, `src/providers/suse-micro/profiles/` và `src/providers/proxmox/profiles/` đều tuân theo cấu trúc 4 thành phần:
 
 ```
 src/providers/<os>/profiles/
@@ -302,7 +359,7 @@ export function getSuseMicroProfile(
 }
 ```
 
-### 4.3. Quy trình 3 bước thêm một Profile mới
+### 5.3. Quy trình 3 bước thêm một Profile mới
 
 Khi bạn muốn thêm một profile mới (ví dụ: `k3s-worker` cho Ubuntu hoặc `microos-desktop` cho SUSE):
 
@@ -319,7 +376,7 @@ Khi bạn muốn thêm một profile mới (ví dụ: `k3s-worker` cho Ubuntu ho
 
 ---
 
-## 5. Hướng Dẫn Mở Rộng: Tự Thêm OS Provider Mới
+## 6. Hướng Dẫn Mở Rộng: Tự Thêm OS Provider Mới
 
 
 Kiến trúc của dự án được thiết kế theo mẫu **Strategy / Registry Pattern**, cho phép bạn dễ dàng tích hợp thêm các bản phân phối Linux khác (ví dụ: Debian, Alpine Linux, Fedora CoreOS, Arch Linux).

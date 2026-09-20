@@ -64,8 +64,8 @@ export function renderNodeRow(host: DashboardHostItem, baseUrl: string): string 
     `;
   }
 
-  const osName = host.os === "suse-micro" ? "openSUSE Leap Micro" : host.os === "ubuntu" ? "Ubuntu Server" : host.os;
-  const osBadgeClass = host.os === "suse-micro" ? "tag-suse" : "tag-ubuntu";
+  const osName = host.os === "suse-micro" ? "openSUSE Leap Micro" : host.os === "ubuntu" ? "Ubuntu Server" : host.os === "proxmox" ? "Proxmox VE" : host.os;
+  const osBadgeClass = host.os === "suse-micro" ? "tag-suse" : host.os === "proxmox" ? "tag-proxmox" : "tag-ubuntu";
 
   const cfg = host.rawConfig || (host as any);
   const net = cfg.network || {};
@@ -631,6 +631,7 @@ export function renderDashboardHtml(context: {
                   <select name="os" onchange="handleOsChange(this, 'add')">
                     <option value="ubuntu" selected>Ubuntu Server</option>
                     <option value="suse-micro">openSUSE Leap Micro</option>
+                    <option value="proxmox">Proxmox VE</option>
                   </select>
                 </div>
               </div>
@@ -779,6 +780,7 @@ export function renderDashboardHtml(context: {
                   <select id="edit-os" name="os" onchange="handleOsChange(this, 'edit')">
                     <option value="ubuntu">Ubuntu Server</option>
                     <option value="suse-micro">openSUSE Leap Micro</option>
+                    <option value="proxmox">Proxmox VE</option>
                   </select>
                 </div>
               </div>

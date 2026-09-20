@@ -130,6 +130,22 @@ const ASSET_SPECS: AssetSpec[] = [
       },
     ],
   },
+  {
+    os: "proxmox",
+    version: "9.2",
+    files: [
+      {
+        name: "vmlinuz",
+        description: "Proxmox VE 9.2 Kernel (Copy from proxmox-auto-install-assistant --pxe output)",
+        required: true,
+      },
+      {
+        name: "initrd.img",
+        description: "Proxmox VE 9.2 Initrd (Copy from proxmox-auto-install-assistant --pxe output)",
+        required: true,
+      },
+    ],
+  },
 ];
 
 function formatBytes(bytes: number): string {
@@ -404,7 +420,7 @@ Usage Options:
   --download   Download missing assets (e.g. ISOs, Talos assets)
   --extract    Force re-extract Kernel/Initrd from ISO (Single Source of Truth)
   --hwe        Use HWE kernel/initrd instead of GA kernel during extraction
-  [os_name]    Target specific OS: 'ubuntu', 'talos', or 'suse-micro'
+  [os_name]    Target specific OS: 'ubuntu', 'talos', 'suse-micro', or 'proxmox'
 
 Examples:
   bun run sync-assets                          # Check status

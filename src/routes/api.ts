@@ -208,7 +208,7 @@ export async function handleApiRoute(
     }
 
     const os = bodyData.os || "ubuntu";
-    const version = bodyData.version || (os === "ubuntu" ? "24.04" : os === "suse-micro" ? "6.2" : undefined);
+    const version = bodyData.version || (os === "ubuntu" ? "24.04" : os === "suse-micro" ? "6.2" : os === "proxmox" ? "9.2" : undefined);
     const profile = bodyData.profile || "generic";
     const note = bodyData.note || undefined;
     const ip = bodyData.ip ? bodyData.ip.trim() : undefined;

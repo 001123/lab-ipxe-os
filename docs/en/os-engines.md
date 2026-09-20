@@ -1,6 +1,6 @@
 # OS Provisioning Engines
 
-This document explains the internal mechanisms of the **Automated OS Engines** integrated into the project: **Ubuntu Server 24.04 (Subiquity / Cloud-Init)**, **Talos Linux (MachineConfig)**, and **openSUSE Leap Micro (Combustion)**. It also provides developer instructions for extending the architecture to support additional Linux distributions.
+This document explains the internal mechanisms of the **Automated OS Engines** integrated into the project: **Ubuntu Server 24.04 (Subiquity / Cloud-Init)**, **Talos Linux (MachineConfig)**, **openSUSE Leap Micro (Combustion)**, and **Proxmox VE 9.2 (Automated Installation)**. It also provides developer instructions for extending the architecture to support additional Linux distributions.
 
 ---
 
@@ -220,7 +220,63 @@ The system provides two distinct profiles for openSUSE Leap Micro under [`src/pr
 
 ---
 
-## 4. Two-Tier Registry Architecture: Provider Registry & Profile Registry Map
+## 4. Proxmox VE 9.2: Automated Installation via PXE + HTTP Answer
+
+Proxmox VE 8.2+ ships an **automated installer** driven by a TOML **answer file**. Unlike Ubuntu/Talos/SUSE, the boot assets (`vmlinuz` + `initrd.img`) cannot be extracted from the stock ISO directly — they must be generated once with the official assistant tool, then every installer fetches its per-host answer from this server over HTTP.
+
+### 4.1. One-Time PXE Asset Preparation (Admin Machine)
+
+```bash
+# 1. Install the assistant (Debian/PVE admin machine)
+apt install proxmox-auto-install-assistant xorriso
+
+# 2. Split a prepared image into PXE boot files bound to this server
+proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+  --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
+  --pxe --pxe-loader ipxe --output ./proxmox-pxe/
+
+# 3. Copy the result into the asset mirror (Single Source of Truth)
+mkdir -p assets/proxmox/9.2
+cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
+```
+
+### 4.2. iPXE Boot Parameters
+
+Defined in [src/providers/proxmox/ipxe.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/proxmox/ipxe.ts):
+
+```ipxe
+kernel ${base_url}/assets/proxmox/9.2/vmlinuz initrd=initrd.img ramdisk_size=16777216 rw quiet splash=silent proxmox-start-auto-installer
+initrd ${base_url}/assets/proxmox/9.2/initrd.img
+boot
+```
+
+`proxmox-start-auto-installer` is mandatory — without it the ISO boots into the interactive installer. Note `initrd=initrd.img` here refers to the initrd filename registered with iPXE (required by the Proxmox init script, unlike the Ubuntu UEFI case).
+
+### 4.3. Dynamic Answer Flow (`POST /os/proxmox/answer`)
+
+```mermaid
+sequenceDiagram
+    participant Inst as PVE auto-installer
+    participant Srv as Bun server
+    Inst->>Srv: POST /os/proxmox/answer (system-info JSON with MACs)
+    Srv->>Srv: Match NIC MAC against registered hosts
+    Srv-->>Inst: answer.toml (kebab-case, TOML)
+    Inst->>Inst: Unattended install, then first boot
+    Inst->>Srv: GET /os/proxmox/:mac/first-boot.sh + POST /api/installed
+```
+
+Key properties of the implementation ([src/providers/proxmox/answer.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/proxmox/answer.ts), route in [src/routes/os-configs.ts](file:///Users/timi/lab/lab-ipxe-os/src/routes/os-configs.ts)):
+
+- **Shared URL, per-host content**: the `--url` baked into the PXE files is identical for all nodes. The server inspects the installer's POST body (`mac_addresses[]` / `network_interfaces[].mac`) and renders the matching host's answer; unknown hardware falls back to the global `default:` profile (`homelab-xxxxxx`).
+- **Kebab-case only**: PVE 9.x rejects legacy `snake_case` keys, so the generator emits `root-password-hashed`, `disk-list`, `from-dhcp`, `zfs.raid`, etc.
+- **Sections**: `[global]` (fqdn, keyboard/country/timezone/mailto, `root-password-hashed` from `password_hash`, `root-ssh-keys`), `[network]` (`from-dhcp` or `from-answer` with CIDR/gateway/dns from `hosts.yaml`), `[disk-setup]` (`filesystem` default `ext4`, disk from `storage.target_disk`, `zfs.raid`), `[first-boot]` (`source = "from-url"` pointing at the per-MAC hook that curls `/api/installed` to flip the node to `INSTALLED` and stop the reinstall loop).
+- **Debugging**: `GET /os/proxmox/answer?mac=<MAC>` renders the same answer without an installer POST; validate any answer with `proxmox-auto-install-assistant validate-answer answer.toml`.
+
+Configuration example: [config/examples/hosts.proxmox.yaml](file:///Users/timi/lab/lab-ipxe-os/config/examples/hosts.proxmox.yaml).
+
+---
+
+## 5. Two-Tier Registry Architecture: Provider Registry & Profile Registry Map
 
 The system is architected around **Separation of Concerns** and the **Open-Closed Principle (OCP)** using a two-tier registry:
 
@@ -231,6 +287,7 @@ flowchart TD
         PR -->|"os: 'ubuntu'"| UP["UbuntuProvider"]
         PR -->|"os: 'talos'"| TP["TalosProvider"]
         PR -->|"os: 'suse-micro'"| SP["SuseMicroProvider"]
+        PR -->|"os: 'proxmox'"| PP["ProxmoxProvider"]
     end
 
     subgraph Tier2 ["Tier 2: Workload Profile Registry Map (src/providers/<os>/profiles/)"]
@@ -244,7 +301,7 @@ flowchart TD
     end
 ```
 
-### 4.1. Advantages of Registry Maps Over Hardcoded Switch Statements
+### 5.1. Advantages of Registry Maps Over Hardcoded Switch Statements
 
 | Dimension | Legacy Switch-Case | Modern Registry Map |
 | :--- | :--- | :--- |
@@ -254,9 +311,9 @@ flowchart TD
 | **Fallback & Reliability** | Prone to missed fallback branches or casing mismatches. | Automatic `.toLowerCase()` normalization with explicit fallback warnings via `console.warn`. |
 | **Design Consistency** | Varied implementations across providers. | Every provider conforms to the exact same modular directory architecture. |
 
-### 4.2. Standardized Profile Directory Structure
+### 5.2. Standardized Profile Directory Structure
 
-Both `src/providers/ubuntu/profiles/` and `src/providers/suse-micro/profiles/` follow a uniform structure:
+`src/providers/ubuntu/profiles/`, `src/providers/suse-micro/profiles/`, and `src/providers/proxmox/profiles/` follow a uniform structure:
 
 ```
 src/providers/<os>/profiles/
@@ -302,7 +359,7 @@ export function getSuseMicroProfile(
 }
 ```
 
-### 4.3. Adding a New Profile in 3 Simple Steps
+### 5.3. Adding a New Profile in 3 Simple Steps
 
 To introduce a new profile (e.g., `k3s-worker` for Ubuntu or `microos-desktop` for SUSE):
 
@@ -319,7 +376,7 @@ To introduce a new profile (e.g., `k3s-worker` for Ubuntu or `microos-desktop` f
 
 ---
 
-## 5. Adding a Custom OS Provider
+## 6. Adding a Custom OS Provider
 
 The project implements the **Strategy / Registry Pattern**, making it straightforward to add new Linux distributions (such as Debian, Alpine Linux, Fedora CoreOS, or Arch Linux).
 

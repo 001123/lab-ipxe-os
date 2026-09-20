@@ -2,6 +2,7 @@ import type { OSProvider } from "./base.ts";
 import { UbuntuProvider } from "./ubuntu/index.ts";
 import { TalosProvider } from "./talos/index.ts";
 import { SuseMicroProvider } from "./suse-micro/index.ts";
+import { ProxmoxProvider } from "./proxmox/index.ts";
 
 export class ProviderRegistry {
   private providers: Map<string, OSProvider> = new Map();
@@ -18,6 +19,7 @@ export class ProviderRegistry {
       "microos",
       "suse_micro",
     ]);
+    this.register(new ProxmoxProvider(), ["proxmox", "proxmox-ve", "pve"]);
   }
 
   public register(provider: OSProvider, aliases: string[] = []): void {

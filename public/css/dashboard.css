@@ -369,6 +369,12 @@ body.has-background-background {
   border: 1px solid rgba(233, 84, 32, 0.3);
 }
 
+.tag-proxmox {
+  background-color: rgba(74, 163, 223, 0.15);
+  color: #4aa3df;
+  border: 1px solid rgba(74, 163, 223, 0.3);
+}
+
 /* Host Row Styles */
 .host-row td {
   vertical-align: middle;

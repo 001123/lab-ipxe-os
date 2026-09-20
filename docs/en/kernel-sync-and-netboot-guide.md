@@ -259,3 +259,32 @@ When a node encounters a Kernel Panic during network boot:
 - [ ] **3. Verify `ramdisk_size`**: Is the ramdisk buffer sized sufficiently (`ramdisk_size=3500000`)?
 - [ ] **4. UEFI Command Line**: Has `initrd=initrd` been removed from the kernel command line to prevent UEFI Boot Stub conflicts?
 - [ ] **5. NFS & HTTP Accessibility**: Verify asset availability via `curl -I http://192.168.250.202:3000/assets/ubuntu/24.04/vmlinuz` and check NFS exports using `showmount -e 192.168.250.4`.
+
+---
+
+## 8. Proxmox VE 9.2 Assets: Assistant-Generated (No Manual ISO Extraction)
+
+Unlike Ubuntu/SUSE, the Proxmox VE kernel and initrd are **not extracted from the stock ISO by hand** — they must be generated with the official `proxmox-auto-install-assistant` (the pair embeds the pointer back to this server's `/os/proxmox/answer`):
+
+```bash
+apt install proxmox-auto-install-assistant xorriso
+
+proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+  --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
+  --pxe --pxe-loader ipxe --output ./proxmox-pxe/
+
+mkdir -p assets/proxmox/9.2
+cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
+```
+
+Quick verification:
+
+```bash
+curl -I http://192.168.250.202:3000/assets/proxmox/9.2/vmlinuz
+curl -I http://192.168.250.202:3000/assets/proxmox/9.2/initrd.img
+# Dry-run the answer for one node (no real installer needed):
+curl "http://192.168.250.202:3000/os/proxmox/answer?mac=bc:24:11:00:24:40"
+```
+
+> [!NOTE]
+> Because `vmlinuz`/`initrd.img` bake in the answer URL at `prepare-iso` time, re-run the command above and overwrite the assets whenever the server `baseUrl` changes.

@@ -219,7 +219,7 @@ if (import.meta.main) {
     let targetOses: string[] = [];
     if (cliConfig.syncOs) {
       if (cliConfig.syncOs === "all") {
-        targetOses = ["ubuntu", "talos", "suse-micro"];
+        targetOses = ["ubuntu", "talos", "suse-micro", "proxmox"];
       } else if (cliConfig.syncOs === "none") {
         targetOses = [];
       } else {

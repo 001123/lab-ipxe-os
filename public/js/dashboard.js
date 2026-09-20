@@ -71,6 +71,7 @@
     if (versionInput) {
       if (os === 'ubuntu') versionInput.value = '24.04';
       if (os === 'suse-micro') versionInput.value = '6.2';
+      if (os === 'proxmox') versionInput.value = '9.2';
     }
   };
 
@@ -127,6 +128,7 @@
         'ubuntu': { title: 'Ubuntu Server', icon: '🐧' },
         'talos': { title: 'Talos Linux', icon: '⚡' },
         'suse-micro': { title: 'openSUSE Leap Micro', icon: '🦎' },
+        'proxmox': { title: 'Proxmox VE', icon: '🖥️' },
       };
 
       let html = '';
@@ -891,8 +893,8 @@
           const os = d.os || 'ubuntu';
           const version = d.version || '';
           const profile = d.profile || d.role || 'generic';
-          const osName = os === 'suse-micro' ? 'openSUSE Leap Micro' : os === 'ubuntu' ? 'Ubuntu Server' : os;
-          const osBadgeClass = os === 'suse-micro' ? 'tag-suse' : 'tag-ubuntu';
+          const osName = os === 'suse-micro' ? 'openSUSE Leap Micro' : os === 'ubuntu' ? 'Ubuntu Server' : os === 'proxmox' ? 'Proxmox VE' : os;
+          const osBadgeClass = os === 'suse-micro' ? 'tag-suse' : os === 'proxmox' ? 'tag-proxmox' : 'tag-ubuntu';
           return `<div class="ag-cell-inner"><span class="tag ${osBadgeClass}">${escapeHtml(osName)} ${escapeHtml(version)}</span><div class="font-mono is-size-7 mt-1">${escapeHtml(profile)}</div></div>`;
         },
       },
