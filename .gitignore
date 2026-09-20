@@ -31,3 +31,6 @@ dist/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 
+# Qoder generated repository wiki
+.qoder/
+
