@@ -277,8 +277,14 @@ proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
   --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
   --pxe --pxe-loader ipxe --output ./proxmox-pxe/
 
+# ISO payload cho initrd thứ hai (xem os-engines.md §4 vì sao không dùng ISO của --pxe)
+proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+  --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
+  --output proxmox-ve-9.2-auto.iso
+
 mkdir -p assets/proxmox/9.2
 cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
+cp proxmox-ve-9.2-auto.iso assets/proxmox/9.2/
 ```
 
 Kiểm tra nhanh:
@@ -286,6 +292,7 @@ Kiểm tra nhanh:
 ```bash
 curl -I http://192.168.250.202:3000/assets/proxmox/9.2/vmlinuz
 curl -I http://192.168.250.202:3000/assets/proxmox/9.2/initrd.img
+curl -I http://192.168.250.202:3000/assets/proxmox/9.2/proxmox-ve-9.2-auto.iso
 # Render thử answer cho 1 node (không cần installer thật):
 curl "http://192.168.250.202:3000/os/proxmox/answer?mac=bc:24:11:00:24:40"
 ```

@@ -144,6 +144,11 @@ const ASSET_SPECS: AssetSpec[] = [
         description: "Proxmox VE 9.2 Initrd (Copy from proxmox-auto-install-assistant --pxe output)",
         required: true,
       },
+      {
+        name: "proxmox-ve-9.2-auto.iso",
+        description: "Proxmox VE 9.2 Prepared ISO, served as second initrd (proxmox.iso). Build on a PVE node: proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso --fetch-from http --url <BASE_URL>/os/proxmox/answer --output proxmox-ve-9.2-auto.iso",
+        required: true,
+      },
     ],
   },
 ];

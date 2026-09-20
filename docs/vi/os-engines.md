@@ -235,9 +235,17 @@ proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
   --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
   --pxe --pxe-loader ipxe --output ./proxmox-pxe/
 
-# 3. Chép kết quả vào asset mirror (Single Source of Truth)
+# 3. Sinh ISO payload cài đặt (cùng answer URL, layout chuẩn).
+#    (Bước đóng gói lại ISO của --pxe hay lỗi xorriso '/boot' trên một số
+#    combo assistant/ISO; ISO chuẩn dưới đây làm proxmox.iso hoàn hảo.)
+proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+  --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
+  --output proxmox-ve-9.2-auto.iso
+
+# 4. Chép kết quả vào asset mirror (Single Source of Truth)
 mkdir -p assets/proxmox/9.2
 cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
+cp proxmox-ve-9.2-auto.iso assets/proxmox/9.2/
 ```
 
 ### 4.2. Tham Số Boot iPXE
@@ -247,10 +255,11 @@ cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
 ```ipxe
 kernel ${base_url}/assets/proxmox/9.2/vmlinuz initrd=initrd.img ramdisk_size=16777216 rw quiet splash=silent proxmox-start-auto-installer
 initrd ${base_url}/assets/proxmox/9.2/initrd.img
+initrd ${base_url}/assets/proxmox/9.2/proxmox-ve-9.2-auto.iso proxmox.iso
 boot
 ```
 
-`proxmox-start-auto-installer` là bắt buộc — thiếu nó ISO sẽ boot vào trình cài tương tác. Lưu ý `initrd=initrd.img` ở đây là tên initrd đã đăng ký với iPXE (init script của Proxmox yêu cầu, khác trường hợp UEFI của Ubuntu).
+`proxmox-start-auto-installer` là bắt buộc — thiếu nó ISO sẽ boot vào trình cài tương tác. Lưu ý `initrd=initrd.img` ở đây là tên initrd đã đăng ký với iPXE (init script của Proxmox yêu cầu, khác trường hợp UEFI của Ubuntu). Dòng `initrd` thứ hai đưa ISO đã chuẩn bị vào installer dưới tên `/proxmox.iso` (payload cài đặt + answer URL nhúng sẵn), đúng như snippet chính chủ của `--pxe-loader ipxe` — client phải tải ~1.8 GB vào RAM nên VM test cần RAM rộng rãi (≥ 6 GB).
 
 ### 4.3. Luồng Answer Động (`POST /os/proxmox/answer`)
 

@@ -273,8 +273,14 @@ proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
   --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
   --pxe --pxe-loader ipxe --output ./proxmox-pxe/
 
+# Payload ISO for the second initrd (see os-engines.md §4 why not the --pxe ISO)
+proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+  --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
+  --output proxmox-ve-9.2-auto.iso
+
 mkdir -p assets/proxmox/9.2
 cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
+cp proxmox-ve-9.2-auto.iso assets/proxmox/9.2/
 ```
 
 Quick verification:
@@ -282,6 +288,7 @@ Quick verification:
 ```bash
 curl -I http://192.168.250.202:3000/assets/proxmox/9.2/vmlinuz
 curl -I http://192.168.250.202:3000/assets/proxmox/9.2/initrd.img
+curl -I http://192.168.250.202:3000/assets/proxmox/9.2/proxmox-ve-9.2-auto.iso
 # Dry-run the answer for one node (no real installer needed):
 curl "http://192.168.250.202:3000/os/proxmox/answer?mac=bc:24:11:00:24:40"
 ```
