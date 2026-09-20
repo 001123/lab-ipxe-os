@@ -235,9 +235,18 @@ proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
   --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
   --pxe --pxe-loader ipxe --output ./proxmox-pxe/
 
-# 3. Copy the result into the asset mirror (Single Source of Truth)
+# 3. Build the installer payload ISO (same answer URL, standard layout).
+#    (The --pxe repackaging step is known to fail on some assistant/ISO
+#    combos with an xorriso '/boot' error; the standard prepared ISO below
+#    is a fully working proxmox.iso payload.)
+proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+  --fetch-from http --url "http://192.168.250.202:3000/os/proxmox/answer" \
+  --output proxmox-ve-9.2-auto.iso
+
+# 4. Copy the result into the asset mirror (Single Source of Truth)
 mkdir -p assets/proxmox/9.2
 cp ./proxmox-pxe/vmlinuz ./proxmox-pxe/initrd.img assets/proxmox/9.2/
+cp proxmox-ve-9.2-auto.iso assets/proxmox/9.2/
 ```
 
 ### 4.2. iPXE Boot Parameters
@@ -247,10 +256,11 @@ Defined in [src/providers/proxmox/ipxe.ts](file:///Users/timi/lab/lab-ipxe-os/sr
 ```ipxe
 kernel ${base_url}/assets/proxmox/9.2/vmlinuz initrd=initrd.img ramdisk_size=16777216 rw quiet splash=silent proxmox-start-auto-installer
 initrd ${base_url}/assets/proxmox/9.2/initrd.img
+initrd ${base_url}/assets/proxmox/9.2/proxmox-ve-9.2-auto.iso proxmox.iso
 boot
 ```
 
-`proxmox-start-auto-installer` is mandatory — without it the ISO boots into the interactive installer. Note `initrd=initrd.img` here refers to the initrd filename registered with iPXE (required by the Proxmox init script, unlike the Ubuntu UEFI case).
+`proxmox-start-auto-installer` is mandatory — without it the ISO boots into the interactive installer. Note `initrd=initrd.img` here refers to the initrd filename registered with iPXE (required by the Proxmox init script, unlike the Ubuntu UEFI case). The second `initrd` line exposes the prepared ISO to the installer as `/proxmox.iso` (installation payload + embedded answer URL), exactly like the official `--pxe-loader ipxe` snippet — the client downloads ~1.8 GB into RAM, so test VMs need generous memory (≥ 6 GB).
 
 ### 4.3. Dynamic Answer Flow (`POST /os/proxmox/answer`)
 

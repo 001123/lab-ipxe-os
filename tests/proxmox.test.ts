@@ -90,6 +90,7 @@ describe("Proxmox VE Provider", () => {
       expect(script).toContain("ramdisk_size=16777216");
       expect(script).toContain("proxmox-start-auto-installer");
       expect(script).toContain(`/assets/proxmox/9.2/initrd.img`);
+      expect(script).toContain(`/assets/proxmox/9.2/proxmox-ve-9.2-auto.iso proxmox.iso`);
     });
   });
 
@@ -199,6 +200,7 @@ describe("Proxmox VE Provider", () => {
       expect(script).toContain("Proxmox VE 9.2");
       expect(script).toContain("proxmox-start-auto-installer");
       expect(script).toContain("initrd=initrd.img");
+      expect(script).toContain("proxmox-ve-9.2-auto.iso proxmox.iso");
     });
 
     it("GET per-MAC answer.toml should return static-network answer", async () => {
