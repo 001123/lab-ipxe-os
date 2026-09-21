@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { resolve } from "node:path";
 import { StateManager } from "../src/core/state.ts";
 import { ConfigManager } from "../src/config.ts";
 import {
@@ -10,12 +9,11 @@ import {
 import { handleApiRoute } from "../src/routes/api.ts";
 
 describe("Stats Grid & Auto-polling Synchronization Tests", () => {
-  const dbPath = resolve(process.cwd(), "data", "test-stats.db");
   let stateMgr: StateManager;
   let configMgr: ConfigManager;
 
   beforeAll(() => {
-    stateMgr = new StateManager(dbPath);
+    stateMgr = new StateManager(":memory:");
     configMgr = new ConfigManager(undefined, stateMgr);
 
     // Seed test hosts
@@ -23,12 +21,7 @@ describe("Stats Grid & Auto-polling Synchronization Tests", () => {
   });
 
   afterAll(() => {
-    try {
-      const fs = require("node:fs");
-      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-      if (fs.existsSync(`${dbPath}-wal`)) fs.unlinkSync(`${dbPath}-wal`);
-      if (fs.existsSync(`${dbPath}-shm`)) fs.unlinkSync(`${dbPath}-shm`);
-    } catch {}
+    stateMgr.close();
   });
 
   describe("UI Rendering Functions", () => {

@@ -59,6 +59,7 @@ describe("Standalone Binary & Embedded Assets Tests", () => {
       "--host", "127.0.0.1",
       "--base-url", "http://pxe.lab.local:8080",
       "--data-dir", "/tmp/custom-data",
+      "--db-path", "/tmp/custom-data/state.db",
       "--assets-dir", "/tmp/custom-assets",
       "--log-dir", "/tmp/custom-logs",
       "--config", "/tmp/custom-hosts.yaml",
@@ -162,6 +163,7 @@ describe("Standalone Binary & Embedded Assets Tests", () => {
       const jsonSync = await resSync.json();
       expect(jsonSync.success).toBe(true);
       expect(jsonSync.os).toBe("talos");
+      stateMgr.close();
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

@@ -22,19 +22,26 @@ export class StateManager {
   private yamlSeedPath: string;
 
   constructor(filePath?: string, yamlSeedPath?: string, defaultSystemConfig?: Partial<SystemConfig>) {
-    const defaultDataDir = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(process.cwd(), "data");
-    const defaultDbPath = process.env.DB_PATH ? resolve(process.env.DB_PATH) : join(defaultDataDir, "state.db");
-    const targetPath = filePath || defaultDbPath;
+    const envDbPath = process.env.DB_PATH;
+    const isMemory = filePath === ":memory:" || (!filePath && envDbPath === ":memory:");
 
-    if (targetPath.endsWith(".json")) {
-      this.dbPath = targetPath.replace(/\.json$/, ".db");
+    if (isMemory) {
+      this.dbPath = ":memory:";
     } else {
-      this.dbPath = targetPath;
-    }
+      const defaultDataDir = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(process.cwd(), "data");
+      const defaultDbPath = envDbPath && envDbPath !== ":memory:" ? resolve(envDbPath) : join(defaultDataDir, "state.db");
+      const targetPath = filePath || defaultDbPath;
 
-    const dir = dirname(this.dbPath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
+      if (targetPath.endsWith(".json")) {
+        this.dbPath = targetPath.replace(/\.json$/, ".db");
+      } else {
+        this.dbPath = targetPath;
+      }
+
+      const dir = dirname(this.dbPath);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
     }
 
     this.yamlSeedPath = resolve(yamlSeedPath || process.env.CONFIG_PATH || "./config/hosts.yaml");
@@ -61,8 +68,10 @@ export class StateManager {
 
   private initDb(defaultSystemConfig?: Partial<SystemConfig>): void {
     try {
-      this.db.run("PRAGMA journal_mode = WAL;");
-      this.db.run("PRAGMA busy_timeout = 5000;");
+      if (this.dbPath !== ":memory:") {
+        this.db.run("PRAGMA journal_mode = WAL;");
+        this.db.run("PRAGMA busy_timeout = 5000;");
+      }
 
       // Global configuration table for defaults & settings
       this.db.run(`

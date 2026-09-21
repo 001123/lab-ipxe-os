@@ -9,21 +9,15 @@ import { renderSuseCombustionScript } from "../src/providers/suse-micro/combusti
 import { server } from "../src/index.ts";
 
 describe("Bun Multi-OS iPXE Server Tests", () => {
-  const testStatePath = resolve(process.cwd(), "data", "test-state.json");
   const testIsoPath = resolve(process.cwd(), "assets", "test.iso");
 
   beforeAll(() => {
-    // Re-seed state from hosts.yaml to ensure clean test state
-    const stateMgr = new StateManager();
-    stateMgr.seedFromYaml();
-
     // Create dummy ISO file for Range request test
     const dummyBuffer = Buffer.alloc(2048, "A");
     writeFileSync(testIsoPath, dummyBuffer);
   });
 
   afterAll(() => {
-    if (existsSync(testStatePath)) unlinkSync(testStatePath);
     if (existsSync(testIsoPath)) unlinkSync(testIsoPath);
   });
 
@@ -68,7 +62,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
 
   describe("StateManager", () => {
     it("should track install status and prevent boot loop", () => {
-      const stateMgr = new StateManager(testStatePath);
+      const stateMgr = new StateManager(":memory:");
       const testMac = "11:22:33:44:55:66";
 
       expect(stateMgr.isInstalled(testMac)).toBe(false);
@@ -82,6 +76,7 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
 
       stateMgr.resetInstalled(testMac);
       expect(stateMgr.isInstalled(testMac)).toBe(false);
+      stateMgr.close();
     });
   });
 

@@ -1,12 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { resolve } from "node:path";
-import { unlinkSync, existsSync } from "node:fs";
 import { StateManager } from "../src/core/state.ts";
 import { ConfigManager } from "../src/config.ts";
 import { handleApiRoute } from "../src/routes/api.ts";
 
 describe("YAML Import Feature Tests", () => {
-  const testDbPath = resolve(process.cwd(), "data", "test-import-state.db");
   let stateMgr: StateManager;
 
   const validYamlSample = `
@@ -44,8 +41,7 @@ hosts:
 `;
 
   beforeEach(() => {
-    if (existsSync(testDbPath)) unlinkSync(testDbPath);
-    stateMgr = new StateManager(testDbPath);
+    stateMgr = new StateManager(":memory:");
     // Clear initial seed so we start with a clean state for testing import
     for (const h of stateMgr.getAllHosts()) {
       stateMgr.deleteHost(h.mac);
@@ -54,9 +50,6 @@ hosts:
 
   afterEach(() => {
     stateMgr.close();
-    if (existsSync(testDbPath)) unlinkSync(testDbPath);
-    if (existsSync(`${testDbPath}-wal`)) unlinkSync(`${testDbPath}-wal`);
-    if (existsSync(`${testDbPath}-shm`)) unlinkSync(`${testDbPath}-shm`);
   });
 
   describe("StateManager.importFromYaml", () => {

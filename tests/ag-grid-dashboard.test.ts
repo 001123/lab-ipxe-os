@@ -1,19 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { resolve } from "node:path";
-import { unlinkSync, existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { StateManager } from "../src/core/state.ts";
 import { ConfigManager } from "../src/config.ts";
 import { handleApiRoute, buildDashboardData } from "../src/routes/api.ts";
 import { renderDashboardHtml } from "../src/ui/dashboard.ts";
 
 describe("AG-Grid Community Dashboard Integration Tests", () => {
-  const testDbPath = resolve(process.cwd(), "data", "test-ag-grid.db");
   let stateMgr: StateManager;
   let configMgr: ConfigManager;
 
   beforeEach(() => {
-    if (existsSync(testDbPath)) unlinkSync(testDbPath);
-    stateMgr = new StateManager(testDbPath);
+    stateMgr = new StateManager(":memory:");
     // Seed test hosts
     stateMgr.createHost({
       mac: "11:22:33:44:55:66",
@@ -38,9 +36,6 @@ describe("AG-Grid Community Dashboard Integration Tests", () => {
 
   afterEach(() => {
     stateMgr.close();
-    if (existsSync(testDbPath)) unlinkSync(testDbPath);
-    if (existsSync(`${testDbPath}-wal`)) unlinkSync(`${testDbPath}-wal`);
-    if (existsSync(`${testDbPath}-shm`)) unlinkSync(`${testDbPath}-shm`);
   });
 
   describe("HTML Template Rendering (renderDashboardHtml)", () => {

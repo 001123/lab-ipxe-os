@@ -1,19 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { resolve } from "node:path";
-import { unlinkSync, existsSync } from "node:fs";
 import { StateManager } from "../src/core/state.ts";
 import { ConfigManager } from "../src/config.ts";
 import { handleApiRoute, buildDashboardData } from "../src/routes/api.ts";
 import { renderNodesTablePartial, renderDashboardHtml } from "../src/ui/dashboard.ts";
 
 describe("Custom JSON Dashboard & API Tests", () => {
-  const testDbPath = resolve(process.cwd(), "data", "test-custom-json-state.db");
   let stateMgr: StateManager;
   let configMgr: ConfigManager;
 
   beforeEach(() => {
-    if (existsSync(testDbPath)) unlinkSync(testDbPath);
-    stateMgr = new StateManager(testDbPath);
+    stateMgr = new StateManager(":memory:");
     // Clear initial seed
     for (const h of stateMgr.getAllHosts()) {
       stateMgr.deleteHost(h.mac);
@@ -23,9 +19,6 @@ describe("Custom JSON Dashboard & API Tests", () => {
 
   afterEach(() => {
     stateMgr.close();
-    if (existsSync(testDbPath)) unlinkSync(testDbPath);
-    if (existsSync(`${testDbPath}-wal`)) unlinkSync(`${testDbPath}-wal`);
-    if (existsSync(`${testDbPath}-shm`)) unlinkSync(`${testDbPath}-shm`);
   });
 
   describe("POST /api/hosts (Create Host with custom_json)", () => {
