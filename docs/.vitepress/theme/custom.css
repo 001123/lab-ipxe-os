@@ -1,0 +1,157 @@
+/**
+ * VitePress Custom Theme - Electric Orange & Deep Matte Black
+ * Designed for lab-ipxe-os documentation
+ */
+
+:root {
+  /* Brand Colors - Light Mode (tuned for contrast & readability) */
+  --vp-c-brand-1: #ea580c;
+  --vp-c-brand-2: #c2410c;
+  --vp-c-brand-3: #9a3412;
+  --vp-c-brand-soft: rgba(234, 88, 12, 0.12);
+
+  --vp-c-tip-1: var(--vp-c-brand-1);
+  --vp-c-tip-2: var(--vp-c-brand-2);
+  --vp-c-tip-3: var(--vp-c-brand-3);
+  --vp-c-tip-soft: var(--vp-c-brand-soft);
+}
+
+.dark {
+  /* Brand Colors - Dark Mode (Vibrant Electric Orange) */
+  --vp-c-brand-1: #f97316;
+  --vp-c-brand-2: #fb923c;
+  --vp-c-brand-3: #fdba74;
+  --vp-c-brand-soft: rgba(249, 115, 22, 0.16);
+
+  /* Deep Matte / OLED Black Palette */
+  --vp-c-bg: #06090e;
+  --vp-c-bg-alt: #0a0e17;
+  --vp-c-bg-elv: #111723;
+  --vp-c-bg-soft: #161e2e;
+
+  /* Text Hierarchy */
+  --vp-c-text-1: #f1f5f9;
+  --vp-c-text-2: #94a3b8;
+  --vp-c-text-3: #64748b;
+
+  /* Dividers & Borders */
+  --vp-c-divider: rgba(255, 255, 255, 0.08);
+  --vp-c-border: rgba(255, 255, 255, 0.10);
+  --vp-c-gutter: #06090e;
+
+  /* Code block styling */
+  --vp-code-block-bg: #090d15;
+  --vp-code-line-highlight-color: rgba(249, 115, 22, 0.12);
+}
+
+/* Text Selection */
+::selection {
+  background-color: rgba(249, 115, 22, 0.35);
+  color: #ffffff;
+}
+
+/* Hero Section Ambient Orange Glow */
+.VPHomeHero {
+  position: relative;
+  overflow: hidden;
+}
+
+.dark .VPHomeHero::before {
+  content: '';
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(850px, 90vw);
+  height: 420px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(249, 115, 22, 0.16) 0%,
+    rgba(234, 88, 12, 0.07) 45%,
+    transparent 75%
+  );
+  filter: blur(50px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Hero Brand Title Gradient */
+.VPHomeHero .name {
+  background: linear-gradient(135deg, #ffedd5 0%, #fb923c 45%, #f97316 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  display: inline-block;
+}
+
+/* Feature Cards with subtle tech border and glow on hover */
+.VPFeatures .VPFeature {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease,
+              box-shadow 0.25s ease;
+  border-radius: 14px;
+}
+
+.dark .VPFeatures .VPFeature {
+  background-color: rgba(17, 23, 35, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.dark .VPFeatures .VPFeature:hover {
+  border-color: rgba(249, 115, 22, 0.45);
+  box-shadow: 0 10px 30px -10px rgba(249, 115, 22, 0.22),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transform: translateY(-3px);
+}
+
+/* Sidebar Active Link Accent */
+.VPSidebarItem.is-active > .item .link {
+  color: var(--vp-c-brand-1) !important;
+  font-weight: 600;
+}
+
+.VPSidebarItem.is-active > .item .link::before {
+  background-color: var(--vp-c-brand-1) !important;
+}
+
+/* Navbar active item indicator & search focus */
+.VPNavBarMenuLink.active {
+  color: var(--vp-c-brand-1) !important;
+}
+
+.DocSearch-Input:focus {
+  border-color: var(--vp-c-brand-1) !important;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.25) !important;
+}
+
+/* Inline Code Badges */
+:not(pre) > code {
+  color: #fb923c !important;
+  background-color: rgba(249, 115, 22, 0.08) !important;
+  border: 1px solid rgba(249, 115, 22, 0.15) !important;
+  border-radius: 6px;
+  padding: 0.15em 0.4em;
+  font-size: 0.88em;
+}
+
+/* Button Brand Styling */
+.VPButton.brand {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+  border-color: #f97316 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 4px 14px -3px rgba(249, 115, 22, 0.45);
+  transition: all 0.2s ease;
+}
+
+.VPButton.brand:hover {
+  background: linear-gradient(135deg, #fb923c 0%, #f97316 100%) !important;
+  box-shadow: 0 6px 20px -3px rgba(249, 115, 22, 0.65);
+  transform: translateY(-1px);
+}
+
+/* Mermaid Diagrams in Dark Mode */
+.dark .mermaid {
+  filter: contrast(1.05) brightness(1.02);
+}

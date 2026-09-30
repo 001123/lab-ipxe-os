@@ -6,6 +6,7 @@ export default withMermaid(
     title: 'lab-ipxe-os',
     description: 'Multi-OS iPXE & Cloud-Init Autoinstall Server powered by Bun and TypeScript',
     base: '/lab-ipxe-os/',
+    appearance: 'dark',
     cleanUrls: true,
     lastUpdated: true,
 
