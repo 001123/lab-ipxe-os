@@ -14,6 +14,7 @@ cd "$ROOT_DIR"
 
 CLEAN_MODE=false
 BUILD_MODE=false
+SKIP_ASSETS=false
 RELEASE_VERSION="latest"
 LXC_ARGS=()
 
@@ -25,6 +26,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --build|--local|--dev)
             BUILD_MODE=true
+            shift
+            ;;
+        --skip-assets|--no-assets)
+            SKIP_ASSETS=true
             shift
             ;;
         --version|-v)
@@ -197,9 +202,13 @@ else
         scp "${SSH_OPTS[@]}" config/hosts.example.yaml "root@$LXC_IP:/opt/lab-ipxe-os/config/hosts.yaml"
     fi
 
-    if [ -d "assets" ] && [ -n "$(ls -A assets 2>/dev/null)" ]; then
+    if [ "$SKIP_ASSETS" = "false" ] && [ -d "assets" ] && [ -n "$(ls -A assets 2>/dev/null)" ]; then
         echo "--> Syncing local boot assets to /opt/lab-ipxe-os/assets..."
-        tar -C assets -cf - . | ssh "${SSH_OPTS[@]}" "root@$LXC_IP" "tar -C /opt/lab-ipxe-os/assets -xf -"
+        if command -v rsync >/dev/null 2>&1 && ssh "${SSH_OPTS[@]}" "root@$LXC_IP" "command -v rsync >/dev/null 2>&1"; then
+            rsync -av --inplace --exclude=".DS_Store" --exclude="._*" -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5" assets/ "root@$LXC_IP:/opt/lab-ipxe-os/assets/"
+        else
+            COPYFILE_DISABLE=1 tar --exclude=".DS_Store" --exclude="._*" -C assets -cf - . | ssh "${SSH_OPTS[@]}" "root@$LXC_IP" "tar -C /opt/lab-ipxe-os/assets -xf -"
+        fi
     fi
 fi
 
@@ -245,6 +254,9 @@ curl -s -o /dev/null -w "   Status: %{http_code}\n" "http://$LXC_IP/api/hosts"
 
 TOTAL_NODES=$(curl -s "http://$LXC_IP/api/nodes" | (grep -o '"mac"' || true) | wc -l | tr -d ' ')
 echo "5. Registered Nodes in SQLite inventory: ${TOTAL_NODES} node(s)"
+
+INSTALLED_VER=$(ssh "${SSH_OPTS[@]}" "root@$LXC_IP" "/opt/lab-ipxe-os/lab-ipxe-os --version" 2>/dev/null || echo "unknown")
+echo "6. Running Server Version: ${INSTALLED_VER}"
 
 echo ""
 echo "======================================================================"
