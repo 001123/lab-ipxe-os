@@ -110,6 +110,9 @@ export function renderNodeRow(host: DashboardHostItem, baseUrl: string): string 
             data-note="${encodeURIComponent(host.note || "")}"
             data-k3s-version="${custom.k3s_version || ""}"
             data-rke2-version="${custom.rke2_version || ""}"
+            data-cluster-cidr="${custom.cluster_cidr || custom.pod_cidr || ""}"
+            data-service-cidr="${custom.service_cidr || ""}"
+            data-cluster-dns="${custom.cluster_dns || ""}"
             data-argocd="${custom.argocd ? "1" : "0"}"
             data-gitops-repo="${custom.gitops_repo || ""}"
             data-gitops-branch="${custom.gitops_branch || ""}"
@@ -646,7 +649,7 @@ export function renderDashboardHtml(context: {
               <label class="label is-small">Profile / Role</label>
               <div class="control">
                 <div class="select is-small is-fullwidth">
-                  <select name="profile">
+                  <select id="add-profile" name="profile" onchange="toggleK8sNetworkFields('add')">
                     <option value="generic">generic (standalone)</option>
                     <option value="k3s-single-node">k3s-single-node</option>
                     <option value="rke2-single-node">rke2-single-node</option>
@@ -691,6 +694,38 @@ export function renderDashboardHtml(context: {
               <label class="label is-small">Note / Description</label>
               <div class="control">
                 <input class="input is-small" type="text" name="note" placeholder="e.g. VM Worker Node">
+              </div>
+            </div>
+
+            <!-- Kubernetes Networking (K3s / RKE2) -->
+            <div id="add-k8s-net-section" class="column is-12 py-2" style="display: none;">
+              <div class="box p-3" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;">
+                <h6 class="title is-7 mb-2 has-text-info is-uppercase" style="letter-spacing: 0.5px;">
+                  ☸️ Kubernetes Cluster Network (K3s / RKE2)
+                </h6>
+                <div class="columns is-multiline is-variable is-2">
+                  <div class="column is-4 py-1">
+                    <label class="label is-small">Pod CIDR (cluster-cidr)</label>
+                    <div class="control">
+                      <input id="add-cluster-cidr" class="input is-small font-mono" type="text" name="cluster_cidr" placeholder="10.42.0.0/16">
+                    </div>
+                    <p class="help has-text-grey">Mặc định: 10.42.0.0/16</p>
+                  </div>
+                  <div class="column is-4 py-1">
+                    <label class="label is-small">Service CIDR (service-cidr)</label>
+                    <div class="control">
+                      <input id="add-service-cidr" class="input is-small font-mono" type="text" name="service_cidr" placeholder="10.43.0.0/16">
+                    </div>
+                    <p class="help has-text-grey">Mặc định: 10.43.0.0/16</p>
+                  </div>
+                  <div class="column is-4 py-1">
+                    <label class="label is-small">Cluster DNS (cluster-dns)</label>
+                    <div class="control">
+                      <input id="add-cluster-dns" class="input is-small font-mono" type="text" name="cluster_dns" placeholder="10.43.0.10">
+                    </div>
+                    <p class="help has-text-grey">Tự động tính IP .10 nếu để trống</p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -795,7 +830,7 @@ export function renderDashboardHtml(context: {
               <label class="label is-small">Profile / Role</label>
               <div class="control">
                 <div class="select is-small is-fullwidth">
-                  <select id="edit-profile" name="profile">
+                  <select id="edit-profile" name="profile" onchange="toggleK8sNetworkFields('edit')">
                     <option value="generic">generic (standalone)</option>
                     <option value="k3s-single-node">k3s-single-node</option>
                     <option value="rke2-single-node">rke2-single-node</option>
@@ -840,6 +875,38 @@ export function renderDashboardHtml(context: {
               <label class="label is-small">Note / Description</label>
               <div class="control">
                 <input id="edit-note" class="input is-small" type="text" name="note">
+              </div>
+            </div>
+
+            <!-- Kubernetes Networking (K3s / RKE2) -->
+            <div id="edit-k8s-net-section" class="column is-12 py-2" style="display: none;">
+              <div class="box p-3" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;">
+                <h6 class="title is-7 mb-2 has-text-info is-uppercase" style="letter-spacing: 0.5px;">
+                  ☸️ Kubernetes Cluster Network (K3s / RKE2)
+                </h6>
+                <div class="columns is-multiline is-variable is-2">
+                  <div class="column is-4 py-1">
+                    <label class="label is-small">Pod CIDR (cluster-cidr)</label>
+                    <div class="control">
+                      <input id="edit-cluster-cidr" class="input is-small font-mono" type="text" name="cluster_cidr" placeholder="10.42.0.0/16">
+                    </div>
+                    <p class="help has-text-grey">Mặc định: 10.42.0.0/16</p>
+                  </div>
+                  <div class="column is-4 py-1">
+                    <label class="label is-small">Service CIDR (service-cidr)</label>
+                    <div class="control">
+                      <input id="edit-service-cidr" class="input is-small font-mono" type="text" name="service_cidr" placeholder="10.43.0.0/16">
+                    </div>
+                    <p class="help has-text-grey">Mặc định: 10.43.0.0/16</p>
+                  </div>
+                  <div class="column is-4 py-1">
+                    <label class="label is-small">Cluster DNS (cluster-dns)</label>
+                    <div class="control">
+                      <input id="edit-cluster-dns" class="input is-small font-mono" type="text" name="cluster_dns" placeholder="10.43.0.10">
+                    </div>
+                    <p class="help has-text-grey">Tự động tính IP .10 nếu để trống</p>
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -55,6 +55,23 @@
     const modal = document.getElementById(modalId);
     if (modal) {
       modal.classList.add('is-active');
+      if (modalId === 'add-node-modal') {
+        window.toggleK8sNetworkFields('add');
+      } else if (modalId === 'edit-node-modal') {
+        window.toggleK8sNetworkFields('edit');
+      }
+    }
+  };
+
+  window.toggleK8sNetworkFields = function (prefix) {
+    const profileSelect = document.getElementById(`${prefix}-profile`);
+    const section = document.getElementById(`${prefix}-k8s-net-section`);
+    if (!profileSelect || !section) return;
+    const val = profileSelect.value || '';
+    if (val.includes('k3s') || val.includes('rke2')) {
+      section.style.display = 'block';
+    } else {
+      section.style.display = 'none';
     }
   };
 
@@ -300,6 +317,18 @@
       editSshTextarea.value = Array.isArray(sshKeys)
         ? sshKeys.join('\n')
         : (typeof sshKeys === 'string' ? sshKeys : '');
+    // Kubernetes Network CIDR fields
+    const editClusterCidr = document.getElementById('edit-cluster-cidr');
+    if (editClusterCidr) {
+      editClusterCidr.value = custom.cluster_cidr || custom.pod_cidr || '';
+    }
+    const editServiceCidr = document.getElementById('edit-service-cidr');
+    if (editServiceCidr) {
+      editServiceCidr.value = custom.service_cidr || '';
+    }
+    const editClusterDns = document.getElementById('edit-cluster-dns');
+    if (editClusterDns) {
+      editClusterDns.value = custom.cluster_dns || '';
     }
 
     window.openModal('edit-node-modal');
@@ -402,6 +431,20 @@
     const editSshTextarea = document.getElementById('edit-ssh-keys-json');
     if (editSshTextarea) {
       editSshTextarea.value = Array.isArray(sshKeys) ? sshKeys.join('\n') : '';
+    }
+
+    // Kubernetes Network CIDR fields
+    const editClusterCidr = document.getElementById('edit-cluster-cidr');
+    if (editClusterCidr) {
+      editClusterCidr.value = d.clusterCidr || customObj.cluster_cidr || customObj.pod_cidr || '';
+    }
+    const editServiceCidr = document.getElementById('edit-service-cidr');
+    if (editServiceCidr) {
+      editServiceCidr.value = d.serviceCidr || customObj.service_cidr || '';
+    }
+    const editClusterDns = document.getElementById('edit-cluster-dns');
+    if (editClusterDns) {
+      editClusterDns.value = d.clusterDns || customObj.cluster_dns || '';
     }
 
     window.openModal('edit-node-modal');

@@ -1,8 +1,10 @@
 import type { HostConfig } from "../../../types.ts";
 import type { SuseProfileSpec } from "./types.ts";
+import { resolveKubernetesCidr } from "../../../core/cidr.ts";
 
 export function getRke2SingleNodeProfile(host: HostConfig, _baseUrl: string): SuseProfileSpec {
   const defaultUser = host.user || "homelab";
+  const { clusterCidr, serviceCidr, clusterDns } = resolveKubernetesCidr(host.custom);
   const configuredRke2Version = host.custom?.rke2_version || "";
   const configuredRke2Token = host.custom?.rke2_token || "";
   const cni = host.custom?.rke2_cni || "canal";
@@ -241,6 +243,9 @@ selinux: false
 cni: "${cni}"
 ingress-controller:
   - "${ingress}"
+cluster-cidr: "${clusterCidr}"
+service-cidr: "${serviceCidr}"
+cluster-dns: "${clusterDns}"
 ${tokenEntry}tls-san:
 ${sanEntries}
 EOF`,

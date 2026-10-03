@@ -38,6 +38,10 @@ hosts:
       rke2_token: "secret-cluster-token-12345" # Token cluster (tùy chọn)
       rke2_cni: "canal" # 'canal', 'cilium', hoặc 'calico'
       rke2_ingress: "traefik" # Ingress controller tích hợp
+      # Tuỳ chọn cấu hình dải mạng RKE2 (Custom CIDR):
+      # cluster_cidr: "10.42.0.0/16"   # Dải IP cấp cho Pods (mặc định: 10.42.0.0/16, alias: pod_cidr)
+      # service_cidr: "10.43.0.0/16"   # Dải IP cấp cho Services (mặc định: 10.43.0.0/16)
+      # cluster_dns: "10.43.0.10"      # IP CoreDNS (mặc định tự tính IP thứ 10 trong service_cidr)
       # Tùy chọn kích hoạt ArgoCD & GitOps tự động:
       argocd: true
       argocd_hostname: "argocd.192.168.250.35.nip.io"

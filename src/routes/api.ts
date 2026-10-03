@@ -14,6 +14,7 @@ import {
   getAssetsStatusSummary,
   runSyncAssets,
 } from "../scripts/sync-assets.ts";
+import { validateKubernetesCidr } from "../core/cidr.ts";
 
 export function buildDashboardData(configMgr: ConfigManager, stateMgr: StateManager) {
   const allHosts = stateMgr.getAllHosts();
@@ -256,6 +257,28 @@ export async function handleApiRoute(
       }
     }
 
+    if (bodyData.cluster_cidr && !custom.cluster_cidr) custom.cluster_cidr = bodyData.cluster_cidr.trim();
+    if (bodyData.pod_cidr && !custom.pod_cidr) custom.pod_cidr = bodyData.pod_cidr.trim();
+    if (bodyData.service_cidr && !custom.service_cidr) custom.service_cidr = bodyData.service_cidr.trim();
+    if (bodyData.cluster_dns && !custom.cluster_dns) custom.cluster_dns = bodyData.cluster_dns.trim();
+
+    if (
+      profile.includes("k3s") ||
+      profile.includes("rke2") ||
+      custom.cluster_cidr ||
+      custom.pod_cidr ||
+      custom.service_cidr ||
+      custom.cluster_dns
+    ) {
+      const cidrValidation = validateKubernetesCidr(custom);
+      if (!cidrValidation.valid) {
+        return new Response(JSON.stringify({ error: cidrValidation.error }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     let sshAuthorizedKeys: string[] | undefined = undefined;
     if (bodyData.ssh_keys_json !== undefined && bodyData.ssh_keys_json !== null) {
       sshAuthorizedKeys = parseSshKeys(bodyData.ssh_keys_json);
@@ -423,7 +446,42 @@ export async function handleApiRoute(
       if (bodyData.gitops_branch !== undefined) custom.gitops_branch = bodyData.gitops_branch;
       if (bodyData.gitops_path !== undefined) custom.gitops_path = bodyData.gitops_path;
       if (bodyData.argocd_hostname !== undefined) custom.argocd_hostname = bodyData.argocd_hostname;
+      if (bodyData.cluster_cidr !== undefined) {
+        const val = bodyData.cluster_cidr.trim();
+        if (val) custom.cluster_cidr = val; else delete custom.cluster_cidr;
+      }
+      if (bodyData.pod_cidr !== undefined) {
+        const val = bodyData.pod_cidr.trim();
+        if (val) custom.pod_cidr = val; else delete custom.pod_cidr;
+      }
+      if (bodyData.service_cidr !== undefined) {
+        const val = bodyData.service_cidr.trim();
+        if (val) custom.service_cidr = val; else delete custom.service_cidr;
+      }
+      if (bodyData.cluster_dns !== undefined) {
+        const val = bodyData.cluster_dns.trim();
+        if (val) custom.cluster_dns = val; else delete custom.cluster_dns;
+      }
       patch.custom = custom;
+    }
+
+    const targetProfile = patch.profile || existing.profile || "";
+    const targetCustom = patch.custom || existing.custom || {};
+    if (
+      targetProfile.includes("k3s") ||
+      targetProfile.includes("rke2") ||
+      targetCustom.cluster_cidr ||
+      targetCustom.pod_cidr ||
+      targetCustom.service_cidr ||
+      targetCustom.cluster_dns
+    ) {
+      const cidrValidation = validateKubernetesCidr(targetCustom);
+      if (!cidrValidation.valid) {
+        return new Response(JSON.stringify({ error: cidrValidation.error }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
     }
 
     const updated = stateMgr.updateHost(cleanMac, patch);

@@ -1,8 +1,10 @@
 import type { HostConfig } from "../../../types.ts";
 import type { ProfileSpec } from "./types.ts";
+import { resolveKubernetesCidr } from "../../../core/cidr.ts";
 
 export function getK3sSingleNodeProfile(host: HostConfig, _baseUrl: string): ProfileSpec {
   const defaultUser = host.user || "homelab";
+  const { clusterCidr, serviceCidr, clusterDns } = resolveKubernetesCidr(host.custom);
   const sans = Array.from(
     new Set([
       host.hostname,
@@ -47,6 +49,9 @@ EOF'`,
       `curtin in-target --target=/target -- mkdir -p /etc/rancher/k3s`,
       `curtin in-target --target=/target -- sh -c 'cat <<EOF > /etc/rancher/k3s/config.yaml
 write-kubeconfig-mode: "0644"
+cluster-cidr: "${clusterCidr}"
+service-cidr: "${serviceCidr}"
+cluster-dns: "${clusterDns}"
 tls-san:
 ${sanEntries}
 EOF'`,

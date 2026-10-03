@@ -499,6 +499,27 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(profile.lateCommands.some((c) => c.includes('K3S_VER="v1.31.0+k3s1"'))).toBe(true);
     });
 
+    it("should configure default and custom Kubernetes CIDRs in k3s config.yaml", () => {
+      const defaultProfile = getUbuntuProfile("k3s-single-node", mockHost, baseUrl);
+      const defaultCmd = defaultProfile.lateCommands.find((c) => c.includes("config.yaml")) || "";
+      expect(defaultCmd).toContain('cluster-cidr: "10.42.0.0/16"');
+      expect(defaultCmd).toContain('service-cidr: "10.43.0.0/16"');
+      expect(defaultCmd).toContain('cluster-dns: "10.43.0.10"');
+
+      const customCidrHost = {
+        ...mockHost,
+        custom: {
+          cluster_cidr: "10.244.0.0/16",
+          service_cidr: "10.96.0.0/12",
+        },
+      };
+      const customProfile = getUbuntuProfile("k3s-single-node", customCidrHost, baseUrl);
+      const customCmd = customProfile.lateCommands.find((c) => c.includes("config.yaml")) || "";
+      expect(customCmd).toContain('cluster-cidr: "10.244.0.0/16"');
+      expect(customCmd).toContain('service-cidr: "10.96.0.0/12"');
+      expect(customCmd).toContain('cluster-dns: "10.96.0.10"');
+    });
+
     it("should return generic profile with base utilities", () => {
       const profile = getUbuntuProfile("generic", mockHost, baseUrl);
       expect(profile.packages).toContain("curl");
@@ -588,6 +609,28 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(script).toContain('token: "super-secret-cluster-token"');
       expect(script).toContain('cni: "cilium"');
       expect(script).toContain('- "ingress-nginx"');
+    });
+
+    it("should configure default and custom Kubernetes CIDRs in rke2 config.yaml", () => {
+      const defaultProfile = getSuseMicroProfile("rke2-single-node", mockSuseHost, baseUrl);
+      const defaultScript = defaultProfile.scriptSnippets.join("\n");
+      expect(defaultScript).toContain('cluster-cidr: "10.42.0.0/16"');
+      expect(defaultScript).toContain('service-cidr: "10.43.0.0/16"');
+      expect(defaultScript).toContain('cluster-dns: "10.43.0.10"');
+
+      const customCidrHost = {
+        ...mockSuseHost,
+        custom: {
+          pod_cidr: "172.20.0.0/16",
+          service_cidr: "172.21.0.0/16",
+          cluster_dns: "172.21.0.254",
+        },
+      };
+      const customProfile = getSuseMicroProfile("rke2-single-node", customCidrHost, baseUrl);
+      const customScript = customProfile.scriptSnippets.join("\n");
+      expect(customScript).toContain('cluster-cidr: "172.20.0.0/16"');
+      expect(customScript).toContain('service-cidr: "172.21.0.0/16"');
+      expect(customScript).toContain('cluster-dns: "172.21.0.254"');
     });
 
     it("should include ArgoCD HelmChart manifest and get-argocd-password helper when custom.argocd is enabled", () => {
@@ -710,6 +753,25 @@ describe("Bun Multi-OS iPXE Server Tests", () => {
       expect(data.host.hostname).toBe("worker-rke2-01");
       expect(data.host.network.ip).toBe("192.168.250.88");
       expect(data.host.custom.argocd).toBe(true);
+    });
+
+    it("POST /api/hosts should reject overlapping Kubernetes CIDRs with 400", async () => {
+      const badPayload = {
+        mac: "52:54:00:99:99:99",
+        hostname: "bad-cidr-node",
+        os: "ubuntu",
+        profile: "k3s-single-node",
+        cluster_cidr: "10.42.0.0/16",
+        service_cidr: "10.42.10.0/24",
+      };
+      const res = await fetch(`${baseUrl}/api/hosts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(badPayload),
+      });
+      expect(res.status).toBe(400);
+      const data = (await res.json()) as any;
+      expect(data.error).toContain("overlap");
     });
 
     it("GET /api/hosts/:mac should retrieve host details from SQLite", async () => {
