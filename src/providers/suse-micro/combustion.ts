@@ -109,21 +109,64 @@ ${packageInstallSnippet}
 # 7. Apply Profile-specific configurations
 ${profileSnippets}
 
-# 8. Restore UEFI Network/PXE boot priority so iPXE StateManager retains control on bare-metal (safe check)
-if command -v efibootmgr >/dev/null 2>&1; then
-  set +e
-  PXE_ID=$(efibootmgr 2>/dev/null | grep -Ei "IPv4|PXE|Network|Ethernet|IP4" | head -n 1 | sed -E "s/^Boot([0-9A-Fa-f]+).*/\\1/" || true)
-  CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep -i "^BootOrder:" | awk '{print $2}' || true)
-  if [ -n "$PXE_ID" ] && [ -n "$CURRENT_ORDER" ]; then
-    REST=$(echo "$CURRENT_ORDER" | tr "," "\\n" | grep -vi "^$PXE_ID$" | tr "\\n" "," | sed "s/,$//" || true)
-    if [ -n "$REST" ]; then
-      efibootmgr -o "$PXE_ID,$REST" 2>/dev/null || true
-    else
-      efibootmgr -o "$PXE_ID" 2>/dev/null || true
-    fi
-  fi
-  set -e
+# 8. Restore UEFI Network/PXE boot priority and install persistent boot order systemd service
+cat << 'EOF' > /usr/local/bin/ensure-pxe-boot-order.sh
+#!/bin/sh
+set -e
+if ! command -v efibootmgr >/dev/null 2>&1; then
+  exit 0
 fi
+
+PXE_ID=$(efibootmgr 2>/dev/null | grep -i "^BootCurrent:" | awk '{print $2}')
+if [ -z "$PXE_ID" ] || ! efibootmgr 2>/dev/null | grep -q "^Boot\${PXE_ID}"; then
+  PXE_ID=""
+fi
+
+if [ -z "$PXE_ID" ]; then
+  PXE_ID=$(efibootmgr 2>/dev/null | grep -Ei "IPv4|PXE|Network|Ethernet|IP4|Realtek|Intel" | head -n 1 | sed -E "s/^Boot([0-9A-Fa-f]+).*/\1/")
+fi
+
+if [ -z "$PXE_ID" ]; then
+  exit 0
+fi
+
+CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep -i "^BootOrder:" | awk '{print $2}')
+if [ -z "$CURRENT_ORDER" ]; then
+  exit 0
+fi
+
+FIRST_ID=$(echo "$CURRENT_ORDER" | cut -d',' -f1)
+if [ "$FIRST_ID" = "$PXE_ID" ]; then
+  exit 0
+fi
+
+REST=$(echo "$CURRENT_ORDER" | tr "," "\n" | grep -vi "^$PXE_ID$" | tr "\n" "," | sed "s/,$//")
+if [ -n "$REST" ]; then
+  efibootmgr -o "$PXE_ID,$REST" >/dev/null 2>&1 || true
+else
+  efibootmgr -o "$PXE_ID" >/dev/null 2>&1 || true
+fi
+EOF
+chmod +x /usr/local/bin/ensure-pxe-boot-order.sh
+
+cat << 'EOF' > /etc/systemd/system/ipxe-boot-order.service
+[Unit]
+Description=Ensure UEFI PXE Network Boot remains first priority for ZTP
+After=local-fs.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ensure-pxe-boot-order.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=basic.target
+EOF
+systemctl enable ipxe-boot-order.service || true
+
+# Run once during combustion
+/usr/local/bin/ensure-pxe-boot-order.sh || true
 
 # 9. Notify Bun iPXE server of successful installation completion
 curl -s --connect-timeout 5 --max-time 10 -X POST "${baseUrl}/api/installed?mac=${encodeURIComponent(

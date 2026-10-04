@@ -50,19 +50,29 @@ sanboot --no-describe --drive 0x80 || exit 1
 - In modern UEFI environments, iPXE translates `0x80` into the first local storage device compliant with the **UEFI Block I/O Protocol**.
 - The `--no-describe` flag instructs iPXE not to construct complex virtual SAN device descriptions in ACPI memory tables. This allows immediate, clean control transfer to the local Master Boot Record (MBR) or EFI System Partition (ESP) without kernel boot interference.
 
-### 2.2. Fail-Safe Fallback: `|| exit 1`
-If `sanboot` encounters an anomaly (e.g., target storage lacks a bootloader or vendor firmware fails to execute iPXE interrupts):
-- `exit 1` causes the iPXE EFI Application (`ipxe.efi`) to exit with an error code.
-- As soon as iPXE exits non-zero, the motherboard's **UEFI Boot Manager (NVRAM)** automatically falls back to the next boot entry in the priority list (typically the `ubuntu` entry pointing to `\EFI\ubuntu\shimx64.efi` on local disk).
+### 2.2. Platform-Aware UEFI Control Handoff (`iseq ${platform} efi`)
+- In legacy BIOS environments, iPXE invokes `sanboot --no-describe --drive 0x80 || exit 1`.
+- In modern x86_64 UEFI environments (such as ASUS B760/B660/Z790 AMI UEFI), `sanboot --drive 0x80` is incompatible with EFI device paths and fails. If allowed to fall through to `exit 1` (returning error code to firmware), some UEFI firmwares with Auto Boot Failure Recovery interpret the network card as broken and automatically swap `BootOrder` to promote SSD to #1.
+- To prevent this, the iPXE script performs dynamic platform detection:
+  ```ipxe
+  iseq ${platform} efi && goto uefi_boot || goto bios_boot
 
-### 2.3. UEFI NVRAM Boot Order Protection (`efibootmgr` late-command)
-On modern bare-metal systems (such as Intel Gen 12+ LGA1700 or AMD AM5 boards), default OS installations run `grub-install`, which forcibly prepends `ubuntu` as Priority #1 in the NVRAM `BootOrder`. This causes subsequent reboots to bypass network boot entirely.
+  :bios_boot
+  sanboot --no-describe --drive 0x80 || exit 1
 
-To preserve ZTP lifecycle management, the project incorporates an automated `efibootmgr` script in Ubuntu Autoinstall `late-commands` ([src/providers/ubuntu/profiles/index.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/ubuntu/profiles/index.ts)):
-1. Detects the network interface `BootID` (`IPv4` / `PXE` / `Network`).
-2. Re-sequences `BootOrder` to place Network Boot back at **#1**, keeping `ubuntu` at **#2**.
+  :uefi_boot
+  exit 0 || exit 1
+  ```
+  `exit 0` returns success status to the UEFI Boot Manager, allowing firmware to transition control to the next priority target in `BootOrder` (`ubuntu` on SSD) cleanly without triggering firmware recovery heuristics.
+
+### 2.3. Dual-Layer UEFI NVRAM Protection (`ipxe-boot-order.service`)
+On bare-metal systems, operating system installers run `grub-install`, placing the local OS at #1 in NVRAM `BootOrder`. Additionally, vendor firmware heuristics may reorder entries upon boot events.
+
+To enforce ZTP boot priority permanently across all motherboard vendors:
+1. **Immediate Configuration during Install**: `late-commands` (Ubuntu) / `combustion` (openSUSE) executes `/usr/local/bin/ensure-pxe-boot-order.sh` before initial reboot, setting the network interface as #1.
+2. **Permanent Systemd Lock (`ipxe-boot-order.service`)**: Automatically installed and enabled across boots. The service checks `BootOrder`, writing to NVRAM only if the first entry is not PXE, thereby protecting NVRAM flash endurance.
 3. **Dual Benefit**:
-   - **When iPXE Server is online**: Nodes always boot into iPXE, allowing the server to orchestrate re-installs or issue `sanboot`.
+   - **When iPXE Server is online**: Nodes always boot into iPXE, allowing the server to orchestrate re-installs or issue local boot handoff.
    - **When iPXE Server is offline / network unplugged**: Motherboard firmware automatically falls back to Priority #2 (`ubuntu` on SSD), ensuring zero downtime.
 
 ---

@@ -39,7 +39,13 @@ echo Bypassing network installation. Booting local disk...
 echo (To reinstall, trigger API: POST ${baseUrl}/api/reset?mac=${cleanMac})
 echo ==========================================================
 sleep 2
+iseq \${platform} efi && goto uefi_boot || goto bios_boot
+
+:bios_boot
 sanboot --no-describe --drive 0x80 || exit 1
+
+:uefi_boot
+exit 0 || exit 1
 `;
     return new Response(script, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -101,7 +107,14 @@ choose --timeout \${menu-timeout} --default \${menu-default} target && goto \${t
 
 :local
 echo Booting from local hard drive...
+iseq \${platform} efi && goto uefi_boot || goto bios_boot
+
+:bios_boot
 sanboot --no-describe --drive 0x80 || exit 1
+
+:uefi_boot
+exit 0 || exit 1
+
 
 :shell
 echo Dropping into iPXE shell. Type 'exit' to return to menu.

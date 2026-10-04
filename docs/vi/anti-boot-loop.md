@@ -50,19 +50,29 @@ sanboot --no-describe --drive 0x80 || exit 1
 - Trong môi trường UEFI hiện đại, iPXE ánh xạ `0x80` tới thiết bị lưu trữ cục bộ đầu tiên theo giao thức **UEFI Block I/O Protocol**.
 - Cờ `--no-describe` chỉ thị cho iPXE không tạo thêm các bảng mô tả thiết bị SAN ảo phức tạp trong bộ nhớ ACPI, giúp quá trình chuyển giao quyền điều khiển CPU sang Master Boot Record (MBR) hoặc EFI System Partition (ESP) trên ổ cứng diễn ra ngay lập tức mà không làm gián đoạn kernel boot.
 
-### 2.2. Cơ chế cứu hộ dự phòng `|| exit 1`
-Nếu lệnh `sanboot` gặp sự cố (ví dụ: ổ cứng thứ nhất chưa có bootloader hợp lệ hoặc firmware UEFI của hãng không hỗ trợ ngắt chuyển tiếp iPXE):
-- Lệnh `exit 1` sẽ kết thúc chương trình thực thi của iPXE EFI Application (`ipxe.efi`).
-- Ngay khi iPXE thoát với mã lỗi khác 0, trình quản lý **UEFI Boot Manager (NVRAM)** của bo mạch chủ sẽ tự động chuyển tiếp sang mục ưu tiên khởi động kế tiếp trong danh sách (thông thường là mục `ubuntu` trỏ vào `\EFI\ubuntu\shimx64.efi` trên ổ đĩa nội bộ).
+### 2.2. Cơ chế chuyển giao điều khiển UEFI (`iseq ${platform} efi`)
+- Trong môi trường BIOS Legacy, iPXE sử dụng `sanboot --no-describe --drive 0x80 || exit 1`.
+- Trong môi trường UEFI x86_64 hiện đại (như UEFI AMI trên bo mạch chủ ASUS B760/B660/Z790), `sanboot --drive 0x80` không tương thích với cấu trúc EFI Device Path và sẽ bị lỗi. Nếu để lệnh rơi vào `exit 1` (trả về mã lỗi cho firmware), một số firmware UEFI có cơ chế tự phục hồi lỗi boot (Auto Boot Recovery) sẽ hiểu nhầm card mạng bị hỏng và tự ý hoán đổi `BootOrder`, đưa SSD lên vị trí #1.
+- Vì vậy, script iPXE tự động phát hiện nền tảng:
+  ```ipxe
+  iseq ${platform} efi && goto uefi_boot || goto bios_boot
 
-### 2.3. Cơ chế bảo vệ thứ tự khởi động UEFI NVRAM (`efibootmgr` late-command)
-Trên các hệ thống Bare-metal hiện đại (như bo mạch chủ Intel Gen 12+ LGA1700 H610/B660/B760 hoặc AMD AM5), quá trình cài đặt OS mặc định sẽ gọi `grub-install`, và công cụ này tự ý chèn `ubuntu` lên vị trí số 1 của biến `BootOrder` trong NVRAM. Điều này khiến máy tính ở các lần reboot sau nhảy thẳng vào ổ cứng mà không qua iPXE nữa.
+  :bios_boot
+  sanboot --no-describe --drive 0x80 || exit 1
 
-Để bảo toàn mô hình ZTP, dự án tích hợp script `efibootmgr` tự động trong `late-commands` của Ubuntu Autoinstall ([src/providers/ubuntu/profiles/index.ts](file:///Users/timi/lab/lab-ipxe-os/src/providers/ubuntu/profiles/index.ts)):
-1. Tìm mã `BootID` của card mạng (`IPv4` / `PXE` / `Network`).
-2. Sắp xếp lại `BootOrder`, đưa card mạng về vị trí ưu tiên **#1**, và giữ `ubuntu` ở vị trí **#2**.
+  :uefi_boot
+  exit 0 || exit 1
+  ```
+  Lệnh `exit 0` trả về trạng thái thành công cho UEFI Boot Manager, cho phép firmware chuyển quyền điều khiển sang mục boot kế tiếp trong danh sách (`ubuntu` trên SSD) một cách êm ái.
+
+### 2.3. Cơ chế bảo vệ thứ tự khởi động UEFI NVRAM (`ipxe-boot-order.service`)
+Trên các hệ thống Bare-metal, quá trình cài đặt OS mặc định sẽ gọi `grub-install`, tự chèn `ubuntu` lên vị trí số 1 của `BootOrder` trong NVRAM. Ngoài ra một số firmware bo mạch chủ tự động đưa thiết bị vừa boot thành công lên vị trí ưu tiên.
+
+Để bảo toàn mô hình ZTP vĩnh viễn trên mọi bo mạch chủ, dự án áp dụng cơ chế 2 lớp:
+1. **Thiết lập tức thì trong cài đặt**: `late-commands` (Ubuntu) / `combustion` (openSUSE) chạy `/usr/local/bin/ensure-pxe-boot-order.sh` ngay trước khi reboot lần đầu để đưa card mạng về #1.
+2. **Khoá vĩnh viễn bằng Systemd Service (`ipxe-boot-order.service`)**: Tự động kích hoạt ở mỗi lần hệ điều hành khởi động. Service này kiểm tra `BootOrder`, và nếu mục đầu tiên chưa phải là PXE thì mới ghi lại vào NVRAM (giúp bảo vệ tuổi thọ chip nhớ NVRAM Flash).
 3. **Lợi ích kép**:
-   - **Khi iPXE Server online**: Node luôn boot vào iPXE để Server quyết định (re-install hoặc chạy `sanboot`).
+   - **Khi iPXE Server online**: Node luôn boot vào iPXE để Server quyết định (re-install hoặc chạy vào ổ cứng).
    - **Khi iPXE Server offline / Rút dây mạng**: BIOS tự động fallback sang mục #2 (`ubuntu` trên SSD), đảm bảo hệ thống không bao giờ bị gián đoạn.
 
 ---
