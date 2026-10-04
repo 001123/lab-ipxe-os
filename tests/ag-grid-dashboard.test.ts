@@ -125,6 +125,12 @@ describe("AG-Grid Community Dashboard Integration Tests", () => {
       expect(jsContent).toContain("is-active-filter");
     });
 
+    it("public/js/dashboard.js should be syntactically valid JavaScript without parse errors", () => {
+      const jsPath = resolve(process.cwd(), "public", "js", "dashboard.js");
+      const jsContent = readFileSync(jsPath, "utf-8");
+      expect(() => new Function(jsContent)).not.toThrow();
+    });
+
     it("public/css/dashboard.css should contain AG Grid styling and Quartz theme overrides", () => {
       const cssPath = resolve(process.cwd(), "public", "css", "dashboard.css");
       const cssContent = readFileSync(cssPath, "utf-8");

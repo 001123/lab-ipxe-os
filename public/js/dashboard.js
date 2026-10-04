@@ -317,6 +317,8 @@
       editSshTextarea.value = Array.isArray(sshKeys)
         ? sshKeys.join('\n')
         : (typeof sshKeys === 'string' ? sshKeys : '');
+    }
+
     // Kubernetes Network CIDR fields
     const editClusterCidr = document.getElementById('edit-cluster-cidr');
     if (editClusterCidr) {
