@@ -3,12 +3,14 @@ import type { ProfileSpec, ProfileHandler } from "./types.ts";
 import { getBaseLateCommands } from "./base.ts";
 import { getGenericProfile } from "./generic.ts";
 import { getK3sSingleNodeProfile } from "./k3s-single-node.ts";
+import { getRke2SingleNodeProfile } from "./rke2-single-node.ts";
 
 export * from "./types.ts";
 
 const PROFILES: Record<string, ProfileHandler> = {
   generic: getGenericProfile,
   "k3s-single-node": getK3sSingleNodeProfile,
+  "rke2-single-node": getRke2SingleNodeProfile,
 };
 
 export function getUbuntuProfile(

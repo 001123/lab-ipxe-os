@@ -68,3 +68,40 @@ hosts:
       layout: direct
       target_disk: "/dev/sda"
     force_install: false
+
+  # ----------------------------------------------------------------------------
+  # 3. RKE2 Single-Node (Direct Disk Install, tuỳ chọn ArgoCD + GitOps)
+  # ----------------------------------------------------------------------------
+  "bc:24:11:00:24:34":
+    hostname: "rke2-single-node"
+    note: "Ubuntu 24.04 LTS chạy RKE2 Single-Node, cài trực tiếp lên đĩa"
+    os: ubuntu
+    version: "24.04"
+    profile: rke2-single-node
+    custom:
+      boot_method: direct
+      # rke2_version: "v1.31.5+rke2r1"   # Bỏ trống để dùng kênh stable
+      rke2_cni: canal                     # canal | calico | cilium
+      rke2_ingress: traefik               # traefik | ingress-nginx
+      # rke2_token: "change-me"           # Token cluster (tự sinh nếu bỏ trống)
+      # cluster_cidr: "10.42.0.0/16"
+      # service_cidr: "10.43.0.0/16"
+      # local-path-provisioner làm StorageClass mặc định (bật sẵn, RKE2 không có storage built-in):
+      # local_path: false                 # Tắt nếu dùng Longhorn/NFS...
+      # local_path_version: "v0.0.37"
+      # Tuỳ chọn ArgoCD tự deploy qua HelmChart:
+      # argocd: true
+      # argocd_hostname: "argocd.192.168.250.34.nip.io"
+      # gitops_repo: "https://github.com/example/homelab-gitops.git"
+      # gitops_branch: "main"
+      # gitops_path: "clusters/rke2"
+    network:
+      dhcp: false
+      ip: "192.168.250.34"
+      netmask: "255.255.255.0"
+      gateway: "192.168.250.1"
+      nameservers: ["192.168.250.1", "1.1.1.1"]
+    storage:
+      layout: direct
+      target_disk: "/dev/sda"
+    force_install: false
