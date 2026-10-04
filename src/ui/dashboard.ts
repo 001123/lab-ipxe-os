@@ -165,6 +165,7 @@ export function renderNodeRow(host: DashboardHostItem, baseUrl: string): string 
               ? `<a
                   class="button is-info is-light is-small"
                   href="${baseUrl}/api/kubeconfig/${encodeURIComponent(host.hostname || host.mac)}"
+                  download="kubeconfig-${host.hostname || host.mac}"
                   target="_blank"
                   title="Download Kubeconfig"
                 >

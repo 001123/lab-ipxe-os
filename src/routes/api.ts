@@ -1145,7 +1145,14 @@ export async function handleApiRoute(
             null,
             2
           ),
-          { status: 200, headers: { "Content-Type": "application/json" } }
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store, no-cache, must-revalidate",
+              "Pragma": "no-cache",
+            },
+          }
         );
       }
 
@@ -1154,6 +1161,8 @@ export async function handleApiRoute(
         headers: {
           "Content-Type": "application/x-yaml; charset=utf-8",
           "Content-Disposition": `attachment; filename="kubeconfig-${resolvedHost.hostname}"`,
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Pragma": "no-cache",
         },
       });
     } catch (err: any) {
