@@ -119,7 +119,7 @@ export function renderNodeRow(host: DashboardHostItem, baseUrl: string): string 
             data-gitops-path="${custom.gitops_path || ""}"
             data-argocd-hostname="${custom.argocd_hostname || ""}"
             data-custom="${encodeURIComponent(JSON.stringify(custom || {}))}"
-            data-ssh-keys="${encodeURIComponent(JSON.stringify(cfg.ssh_authorized_keys || []))}"
+            data-ssh-keys="${encodeURIComponent(JSON.stringify(Array.from(new Set((cfg.ssh_authorized_keys || []).map((k: string) => (typeof k === "string" ? k.trim() : String(k).trim())).filter(Boolean)))))}"
           >
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>

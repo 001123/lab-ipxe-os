@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { StateManager } from "../src/core/state.ts";
 import { ConfigManager } from "../src/config.ts";
-import { handleApiRoute, buildDashboardData } from "../src/routes/api.ts";
+import { handleApiRoute, buildDashboardData, parseSshKeys } from "../src/routes/api.ts";
 import { renderNodesTablePartial, renderDashboardHtml } from "../src/ui/dashboard.ts";
 
 describe("Custom JSON Dashboard & API Tests", () => {
@@ -296,6 +296,56 @@ describe("Custom JSON Dashboard & API Tests", () => {
       const hostItem = hosts.find((h) => h.mac === "bb:cc:dd:ee:ff:04");
       const expected = encodeURIComponent(JSON.stringify(hostItem?.ssh_authorized_keys || []));
       expect(html).toContain(`data-ssh-keys="${expected}"`);
+    });
+
+    it("should deduplicate ssh_authorized_keys when defaults and host have the same key", async () => {
+      const commonKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPaWkIWwJqchLwmCMSN3hmUDVg08y3SU5L544sJSFpbW timi@homelab";
+      // Set global default with commonKey
+      stateMgr.saveGlobalDefaultConfig({
+        ssh_authorized_keys: [commonKey],
+      });
+
+      // Update host with the exact same key (1 line)
+      const form = new FormData();
+      form.append("hostname", "node-dup-test");
+      form.append("os", "ubuntu");
+      form.append("ssh_keys_json", commonKey);
+
+      // Create host
+      stateMgr.createHost({
+        mac: "bb:cc:dd:ee:ff:05",
+        hostname: "node-dup-test",
+        os: "ubuntu",
+        ssh_authorized_keys: [commonKey],
+      });
+
+      // Query host with applyDefaults = true
+      const host = stateMgr.getHost("bb:cc:dd:ee:ff:05", true);
+      expect(host?.ssh_authorized_keys).toBeDefined();
+      expect(host?.ssh_authorized_keys).toEqual([commonKey]);
+      expect(host?.ssh_authorized_keys?.length).toBe(1);
+
+      // Ensure getAllHosts also has only 1 entry (not duplicated)
+      const allHosts = stateMgr.getAllHosts(true);
+      const matched = allHosts.find((h) => h.mac === "bb:cc:dd:ee:ff:05");
+      expect(matched?.ssh_authorized_keys).toEqual([commonKey]);
+      expect(matched?.ssh_authorized_keys?.length).toBe(1);
+    });
+
+    it("should deduplicate duplicate lines in parseSshKeys", () => {
+      const key1 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI1 admin@node";
+      const key2 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI2 user@node";
+
+      // Array input with duplicates
+      expect(parseSshKeys([key1, key1, key2])).toEqual([key1, key2]);
+
+      // Multiline text input with duplicates and extra spaces
+      const multiline = `${key1}\n${key1} \n\n${key2}\n${key2}`;
+      expect(parseSshKeys(multiline)).toEqual([key1, key2]);
+
+      // JSON string array input with duplicates
+      const jsonStr = JSON.stringify([key1, key1, key2]);
+      expect(parseSshKeys(jsonStr)).toEqual([key1, key2]);
     });
   });
 });

@@ -60,7 +60,13 @@ export function buildDashboardData(configMgr: ConfigManager, stateMgr: StateMana
 export function parseSshKeys(input: any): string[] {
   if (!input) return [];
   if (Array.isArray(input)) {
-    return input.map((k) => String(k).trim()).filter(Boolean);
+    return Array.from(
+      new Set(
+        input
+          .map((k) => (typeof k === "string" ? k.trim() : String(k).trim()))
+          .filter(Boolean)
+      )
+    );
   }
   const raw = input.toString().trim();
   if (!raw) return [];
@@ -68,14 +74,24 @@ export function parseSshKeys(input: any): string[] {
     try {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.map((k) => String(k).trim()).filter(Boolean);
+        return Array.from(
+          new Set(
+            parsed
+              .map((k) => (typeof k === "string" ? k.trim() : String(k).trim()))
+              .filter(Boolean)
+          )
+        );
       }
     } catch {}
   }
-  return raw
-    .split(/\r?\n/)
-    .map((line: string) => line.trim())
-    .filter((line: string) => line.length > 0 && !line.startsWith("#"));
+  return Array.from(
+    new Set(
+      raw
+        .split(/\r?\n/)
+        .map((line: string) => line.trim())
+        .filter((line: string) => line.length > 0 && !line.startsWith("#"))
+    )
+  );
 }
 
 export async function handleApiRoute(

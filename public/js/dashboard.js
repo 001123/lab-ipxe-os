@@ -289,7 +289,10 @@
     const net = cfg.network || {};
     const stor = cfg.storage || {};
     const custom = cfg.custom || {};
-    const sshKeys = cfg.ssh_authorized_keys || [];
+    const rawSshKeys = cfg.ssh_authorized_keys || [];
+    const sshKeys = Array.isArray(rawSshKeys)
+      ? Array.from(new Set(rawSshKeys.map((k) => (typeof k === 'string' ? k.trim() : String(k).trim())).filter(Boolean)))
+      : (typeof rawSshKeys === 'string' ? Array.from(new Set(rawSshKeys.split(/\r?\n/).map((k) => k.trim()).filter(Boolean))) : []);
 
     document.getElementById('edit-mac').value = host.mac || cfg.mac || '';
     document.getElementById('edit-hostname').value = host.hostname || cfg.hostname || '';
@@ -314,9 +317,7 @@
     // SSH Keys field
     const editSshTextarea = document.getElementById('edit-ssh-keys-json');
     if (editSshTextarea) {
-      editSshTextarea.value = Array.isArray(sshKeys)
-        ? sshKeys.join('\n')
-        : (typeof sshKeys === 'string' ? sshKeys : '');
+      editSshTextarea.value = sshKeys.join('\n');
     }
 
     // Kubernetes Network CIDR fields
@@ -425,14 +426,17 @@
     let sshKeys = [];
     if (d.sshKeys) {
       try {
-        sshKeys = JSON.parse(decodeURIComponent(d.sshKeys));
+        const parsed = JSON.parse(decodeURIComponent(d.sshKeys));
+        if (Array.isArray(parsed)) {
+          sshKeys = Array.from(new Set(parsed.map((k) => (typeof k === 'string' ? k.trim() : String(k).trim())).filter(Boolean)));
+        }
       } catch (err) {
         console.error('Failed to parse d.sshKeys:', err);
       }
     }
     const editSshTextarea = document.getElementById('edit-ssh-keys-json');
     if (editSshTextarea) {
-      editSshTextarea.value = Array.isArray(sshKeys) ? sshKeys.join('\n') : '';
+      editSshTextarea.value = sshKeys.join('\n');
     }
 
     // Kubernetes Network CIDR fields

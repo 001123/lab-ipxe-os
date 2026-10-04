@@ -217,10 +217,16 @@ export class ConfigManager {
       role: matchedHost?.role || defaults.role,
       user: matchedHost?.user || defaults.user || "homelab",
       password_hash: matchedHost?.password_hash || defaults.password_hash,
-      ssh_authorized_keys: [
-        ...(defaults.ssh_authorized_keys || []),
-        ...(matchedHost?.ssh_authorized_keys || []),
-      ],
+      ssh_authorized_keys: Array.from(
+        new Set(
+          [
+            ...(defaults.ssh_authorized_keys || []),
+            ...(matchedHost?.ssh_authorized_keys || []),
+          ]
+            .map((k) => k.trim())
+            .filter(Boolean)
+        )
+      ),
       storage: {
         ...defaults.storage,
         ...matchedHost?.storage,
@@ -229,10 +235,16 @@ export class ConfigManager {
         ...defaults.network,
         ...matchedHost?.network,
       },
-      extra_packages: [
-        ...(defaults.extra_packages || []),
-        ...(matchedHost?.extra_packages || []),
-      ],
+      extra_packages: Array.from(
+        new Set(
+          [
+            ...(defaults.extra_packages || []),
+            ...(matchedHost?.extra_packages || []),
+          ]
+            .map((p) => p.trim())
+            .filter(Boolean)
+        )
+      ),
       force_install: matchedHost?.force_install ?? false,
       note: matchedHost?.note || defaults.note || undefined,
       custom: {

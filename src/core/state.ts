@@ -258,7 +258,17 @@ export class StateManager {
   }
 
   public saveGlobalDefaultConfig(config: DefaultHostConfig): void {
-    const json = JSON.stringify(config);
+    const sanitizedConfig = { ...config };
+    if (Array.isArray(sanitizedConfig.ssh_authorized_keys)) {
+      sanitizedConfig.ssh_authorized_keys = Array.from(
+        new Set(
+          sanitizedConfig.ssh_authorized_keys
+            .map((k) => (typeof k === "string" ? k.trim() : String(k).trim()))
+            .filter(Boolean)
+        )
+      );
+    }
+    const json = JSON.stringify(sanitizedConfig);
     this.db.prepare(`
       INSERT INTO global_config (key, value_json, updated_at)
       VALUES ('default_host_config', $json, datetime('now'))
@@ -325,10 +335,16 @@ export class StateManager {
       role: row.role || defaults.role,
       user: row.user || defaults.user || "homelab",
       password_hash: row.password_hash || defaults.password_hash,
-      ssh_authorized_keys: [
-        ...(defaults.ssh_authorized_keys || []),
-        ...(ssh_keys || []),
-      ],
+      ssh_authorized_keys: Array.from(
+        new Set(
+          [
+            ...(defaults.ssh_authorized_keys || []),
+            ...(ssh_keys || []),
+          ]
+            .map((k) => (typeof k === "string" ? k.trim() : String(k).trim()))
+            .filter(Boolean)
+        )
+      ),
       storage: {
         ...defaults.storage,
         target_disk: row.target_disk || defaults.storage?.target_disk,
@@ -343,10 +359,16 @@ export class StateManager {
         nameservers: nameservers || defaults.network?.nameservers,
         interface: row.interface || defaults.network?.interface,
       },
-      extra_packages: [
-        ...(defaults.extra_packages || []),
-        ...(extra_packages || []),
-      ],
+      extra_packages: Array.from(
+        new Set(
+          [
+            ...(defaults.extra_packages || []),
+            ...(extra_packages || []),
+          ]
+            .map((p) => (typeof p === "string" ? p.trim() : String(p).trim()))
+            .filter(Boolean)
+        )
+      ),
       force_install: Boolean(row.force_install),
       note: row.note || defaults.note,
       custom: {
@@ -428,7 +450,17 @@ export class StateManager {
       $target_disk: host.storage?.target_disk || null,
       $storage_layout: host.storage?.layout || null,
       $swap_size: host.storage?.swap_size ? String(host.storage.swap_size) : null,
-      $ssh_keys_json: host.ssh_authorized_keys ? JSON.stringify(host.ssh_authorized_keys) : null,
+      $ssh_keys_json: host.ssh_authorized_keys
+        ? JSON.stringify(
+            Array.from(
+              new Set(
+                host.ssh_authorized_keys
+                  .map((k) => (typeof k === "string" ? k.trim() : String(k).trim()))
+                  .filter(Boolean)
+              )
+            )
+          )
+        : null,
       $extra_packages_json: host.extra_packages ? JSON.stringify(host.extra_packages) : null,
       $force_install: host.force_install ? 1 : 0,
       $note: host.note || null,
@@ -622,6 +654,15 @@ export class StateManager {
       if (h.profile) item.profile = h.profile;
       if (h.role) item.role = h.role;
       if (h.note) item.note = h.note;
+      if (h.ssh_authorized_keys && h.ssh_authorized_keys.length > 0) {
+        item.ssh_authorized_keys = Array.from(
+          new Set(
+            h.ssh_authorized_keys
+              .map((k) => (typeof k === "string" ? k.trim() : String(k).trim()))
+              .filter(Boolean)
+          )
+        );
+      }
       if (h.custom && Object.keys(h.custom).length > 0) item.custom = h.custom;
       if (h.network) {
         item.network = {};
