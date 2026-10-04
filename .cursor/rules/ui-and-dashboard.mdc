@@ -1,0 +1,24 @@
+---
+description: Guidelines for updating Dashboard UI, API routes, and embedded client assets
+globs: src/ui/**,public/**,src/routes/**
+alwaysApply: false
+---
+
+# UI & API Development Guide
+
+## Dashboard & Asset Pipeline
+
+1. **Embedded Assets for Standalone Binaries**:
+   - `lab-ipxe-os` can be compiled into a single self-contained binary (`dist/lab-ipxe-os`).
+   - When modifying static browser files in `public/` (such as `public/js/dashboard.js` or `public/css/`), verify that `src/ui/embedded-assets.ts` imports and bundles them correctly with `with { type: "text" }` or binary loaders.
+   - Run `bun test tests/standalone-binary.test.ts` to ensure embedded assets are intact.
+
+2. **JavaScript Syntax & Browser Compatibility**:
+   - `public/js/dashboard.js` runs directly in modern browsers without Babel/transpilation.
+   - Avoid syntax errors (unmatched braces, invalid modern syntax without browser support).
+   - Ensure the automated JS syntax test passes: `bun test tests/ag-grid-dashboard.test.ts`.
+
+3. **REST API Design (`src/routes/api.ts`)**:
+   - Keep route handlers thin. Delegate business logic and state transitions to `src/core/`.
+   - Maintain cache prevention headers on dynamic JSON responses (`Cache-Control: no-store, no-cache, must-revalidate`).
+   - Validate request payloads before updating SQLite state.

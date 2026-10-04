@@ -1,0 +1,65 @@
+---
+description: Update or deploy the latest (or specified) release version of lab-ipxe-os to the local Proxmox LXC container (192.168.250.11), or when user invokes /update-lxc-version
+globs: 
+alwaysApply: false
+---
+
+# Update LXC Version (`/update-lxc-version`)
+
+This rule automates deploying and updating `lab-ipxe-os` on the local Proxmox LXC container (`ipxe-server` at `192.168.250.11`).
+
+## Workflow
+
+### 1. Determine Target Version & Flags
+
+Check user intent:
+- **Latest GitHub Release (Default)**: Fetches the newest release tag from `001123/lab-ipxe-os`.
+- **Specific Version**: E.g., `v0.0.11`, `--version v0.0.11`.
+- **Local Build (`--build`)**: Compiles local source with `bun run build:linux-x64` and pushes the binary.
+- **Clean Mode (`--clean`)**: Resets SQLite database and wipes state on LXC.
+- **Assets**: By default, asset syncing is skipped (`--skip-assets`) so deployments take ~10 seconds. Use `--sync-assets` if ISO/kernel assets were modified.
+
+### 2. Execution Command
+
+Run the update helper script or `proxmox/deploy-lxc.sh`:
+
+```bash
+# Update to latest release (fast, skips asset re-sync)
+bash .agents/skills/update-lxc-version/scripts/update.sh
+
+# Or specify a particular version
+bash .agents/skills/update-lxc-version/scripts/update.sh --version v0.0.11
+
+# Or deploy from local source
+bash .agents/skills/update-lxc-version/scripts/update.sh --build
+
+# Or perform a fresh reinstall
+bash .agents/skills/update-lxc-version/scripts/update.sh --clean
+```
+
+Or directly via `proxmox/deploy-lxc.sh`:
+```bash
+bash proxmox/deploy-lxc.sh --version latest --skip-assets
+```
+
+### 3. Verification
+
+Always verify the service and endpoints after deployment:
+
+1. **Verify Installed Version:**
+   ```bash
+   ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 root@192.168.250.11 "/opt/lab-ipxe-os/lab-ipxe-os --version"
+   ```
+2. **Verify Service Health:**
+   ```bash
+   ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 root@192.168.250.11 "systemctl is-active lab-ipxe-os.service"
+   ```
+3. **Verify HTTP Endpoints:**
+   - Dashboard: `curl -sI http://192.168.250.11/` (Expect HTTP 200)
+   - iPXE Boot Script: `curl -sI http://192.168.250.11/boot.ipxe` (Expect HTTP 200)
+   - Nodes API: `curl -s http://192.168.250.11/api/nodes` (Expect HTTP 200 JSON)
+   - Public Client Script: `curl -sI http://192.168.250.11/public/js/dashboard.js` (Expect HTTP 200)
+
+### 4. Summary
+
+Provide a concise report with the updated version, service status, and dashboard link.

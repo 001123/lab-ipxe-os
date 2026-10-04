@@ -1,0 +1,32 @@
+---
+description: Guidelines and conventions for implementing or modifying OS providers and profiles
+globs: src/providers/**
+alwaysApply: false
+---
+
+# OS Providers & Profiles Guide
+
+OS-specific provisioning logic resides under `src/providers/<os>/`.
+
+## Supported Providers
+
+- `src/providers/ubuntu/`: Ubuntu Server autoinstall (`user-data`, `meta-data`, cloud-init profiles like `rke2-single-node`, `k3s`).
+- `src/providers/suse-micro/`: openSUSE Leap Micro Combustion engine script generator (`combustion.ts`, profiles).
+- `src/providers/proxmox/`: Proxmox VE automated installer profiles and ISO initrd payload generators.
+- `src/providers/talos/`: Talos Linux machine configuration generators.
+
+## Key Conventions
+
+1. **Profile Isolation**:
+   - Each OS provider exports a `profiles` registry mapping profile names to generator functions.
+   - Keep profile files in `src/providers/<os>/profiles/`.
+   - Never hardcode host-specific IPs or MAC addresses in profiles; extract from the host configuration context.
+
+2. **Boot Script Output**:
+   - Boot scripts must output valid iPXE syntax (`#!ipxe`).
+   - Use `/assets/<os>/...` URL paths for kernel and initrd payloads.
+   - Always include the phone-home callback URL so the server tracks the `INSTALLED` state and prevents boot loops.
+
+3. **Validation & Tests**:
+   - When introducing or altering a profile, add or update corresponding tests in `tests/` (e.g., `tests/ubuntu-rke2.test.ts`).
+   - Run `bun test` to verify generated iPXE and cloud-init configs.

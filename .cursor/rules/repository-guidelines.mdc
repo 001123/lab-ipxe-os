@@ -1,0 +1,48 @@
+---
+description: Repository Guidelines, Coding Standards, and Architecture for lab-ipxe-os
+globs: 
+alwaysApply: true
+---
+
+# Repository Guidelines (`lab-ipxe-os`)
+
+## Project Structure & Architecture
+
+The Bun/TypeScript server starts in `src/index.ts`.
+- `src/routes/`: HTTP route handlers (thin routing logic).
+- `src/core/`: Core business logic, SQLite state management (`data/state.db`), asset synchronization, and utility helpers.
+- `src/providers/<os>/`: OS-specific boot script & cloud-init generators (e.g., `ubuntu`, `talos`, `suse-micro`, `proxmox`). Profile definitions live in each provider's `profiles/` directory.
+- `src/ui/`: Server-side dashboard rendering and embedded asset packaging (`src/ui/embedded-assets.ts`).
+- `public/`: Static browser assets (CSS, JS, icons).
+- `config/`: Configuration samples (`config/examples/`) and local config (`config/hosts.yaml`).
+- `proxmox/`: Proxmox VM & LXC automation scripts (`create-lxc.ts`, `deploy-lxc.sh`).
+- `tests/`: Test suite using `bun:test` (`tests/*.test.ts`).
+
+## Development & Build Commands
+
+- `bun install`: Install dependencies.
+- `bun run dev`: Start development server with file watching.
+- `bun test`: Run test suite with ephemeral ports (`PORT=0`).
+- `bun test tests/<file>.test.ts`: Run a single test file.
+- `bun run build`: Compile standalone binary to `dist/lab-ipxe-os`.
+- `bun run build:linux-x64`: Compile standalone Linux x64 binary.
+- `bun run sync-assets`: Synchronize OS boot assets locally.
+- `bun run docs:build`: Verify documentation build.
+
+## Coding Style & Standards
+
+- **TypeScript**: Strict TypeScript, ES modules with explicit `.ts` import extensions.
+- **Formatting**: 2-space indentation, double-quoted strings (`"`), semicolons required.
+- **Naming**: `camelCase` for functions/variables, `PascalCase` for types/classes, `kebab-case` for file names.
+- **Imports**: Group imports (standard library `node:*`, third-party packages, internal modules).
+- **Embedded Assets**: When modifying static assets in `public/`, ensure `src/ui/embedded-assets.ts` and standalone binary compatibility are preserved.
+
+## Security & Ignored Files
+
+Never commit:
+- `.env`, `.env.local`, `proxmox/credentials.env`
+- Kubeconfig files (`kubeconfig/`, `*.kubeconfig`)
+- Live host configs (`config/hosts.yaml`)
+- Runtime SQLite databases (`data/*.db*`)
+- Runtime logs (`logs/`, `*.log`)
+- Downloaded boot assets (`assets/**/*`)
