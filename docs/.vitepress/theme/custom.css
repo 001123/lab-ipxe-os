@@ -46,6 +46,10 @@
 
 /* Text Selection */
 ::selection {
+  background-color: rgba(234, 88, 12, 0.25);
+}
+
+.dark ::selection {
   background-color: rgba(249, 115, 22, 0.35);
   color: #ffffff;
 }
@@ -77,10 +81,16 @@
 
 /* Hero Brand Title Gradient */
 .VPHomeHero .name {
-  background: linear-gradient(135deg, #ffedd5 0%, #fb923c 45%, #f97316 100%) !important;
+  background: linear-gradient(135deg, #c2410c 0%, #ea580c 45%, #f97316 100%) !important;
   -webkit-background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
   display: inline-block;
+}
+
+.dark .VPHomeHero .name {
+  background: linear-gradient(135deg, #ffedd5 0%, #fb923c 45%, #f97316 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
 }
 
 /* Feature Cards with subtle tech border and glow on hover */
@@ -89,6 +99,12 @@
               border-color 0.25s ease,
               box-shadow 0.25s ease;
   border-radius: 14px;
+}
+
+.VPFeatures .VPFeature:hover {
+  border-color: rgba(234, 88, 12, 0.35);
+  box-shadow: 0 10px 25px -10px rgba(234, 88, 12, 0.15);
+  transform: translateY(-3px);
 }
 
 .dark .VPFeatures .VPFeature {
@@ -127,12 +143,18 @@
 
 /* Inline Code Badges */
 :not(pre) > code {
-  color: #fb923c !important;
-  background-color: rgba(249, 115, 22, 0.08) !important;
-  border: 1px solid rgba(249, 115, 22, 0.15) !important;
+  color: #c2410c !important;
+  background-color: rgba(234, 88, 12, 0.08) !important;
+  border: 1px solid rgba(234, 88, 12, 0.2) !important;
   border-radius: 6px;
   padding: 0.15em 0.4em;
   font-size: 0.88em;
+}
+
+.dark :not(pre) > code {
+  color: #fb923c !important;
+  background-color: rgba(249, 115, 22, 0.08) !important;
+  border: 1px solid rgba(249, 115, 22, 0.15) !important;
 }
 
 /* Button Brand Styling */
