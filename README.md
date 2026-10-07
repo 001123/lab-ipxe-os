@@ -100,6 +100,19 @@ All comprehensive architecture explanations, step-by-step guides, and configurat
 
 ---
 
+## 🌟 Star History
+
+<a href="https://www.star-history.com/?repos=001123%2Flab-ipxe-os&type=date&legend=top-left">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=001123/lab-ipxe-os&type=Date&legend=top-left&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=001123/lab-ipxe-os&type=Date&legend=top-left" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=001123/lab-ipxe-os&type=Date&legend=top-left" />
+  </picture>
+</a>
+
+---
+
 ## 📜 License
 
 This project is open source and available under the [MIT License](LICENSE).
+
